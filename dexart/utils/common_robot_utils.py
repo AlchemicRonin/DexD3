@@ -99,6 +99,7 @@ def load_robot(scene: sapien.Scene, robot_name, disable_self_collision=True) -> 
         info = generate_arm_robot_hand_info()[robot_name]
     robot_file = info.path
     filename = str(package_dir / robot_file)
+    # print(f"Loading robot from {filename}")
     robot_builder = loader.load_file_as_articulation_builder(filename)
     if disable_self_collision:
         for link_builder in robot_builder.get_link_builders():

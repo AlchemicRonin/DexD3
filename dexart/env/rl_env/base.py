@@ -320,6 +320,10 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             raise RuntimeError(f"Only point cloud, depth, and segmentation are allowed when no_rgb is enabled.")
 
     def setup_imagination_config(self, config: Dict[str, Dict[str, int]]):
+        """_summary_
+        The function sets up the imagination config for the environment.
+        What the meaning of goal?
+        """
         from dexart.utils.render_scene_utils import actor_to_open3d_mesh
         import open3d as o3d
         # Imagination can only be used with point cloud representation
@@ -557,6 +561,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                         output_array = np.zeros(shape, dtype=np.float32)
                         sapien.dlpack.dl_to_numpy_cuda_async_unchecked(dl_tensor, output_array)
                         sapien.dlpack.dl_cuda_sync()
+                    
                     if modality == "rgb":
                         obs = output_array[..., :3]
                     elif modality == "depth":
