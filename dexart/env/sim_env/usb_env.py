@@ -46,6 +46,7 @@ class USBEnv(BaseSimulationEnv):
         index = renderer_kwargs['index']
         self.task_config_name = 'usb'
         self.instance_list = TASK_CONFIG[self.task_config_name]
+        print("instance_list: ", self.instance_list)
 
         if isinstance(index, list):
             self.instance_list = index
@@ -56,7 +57,6 @@ class USBEnv(BaseSimulationEnv):
 
         self.i = 0
 
-        ####################### WHAT IS THIS FOR? #######################
         if not self.change_instance_when_reset:
             self.index = self.instance_list[index]
             self.instance = self.load_instance(index=self.index)
@@ -159,18 +159,18 @@ class USBEnv(BaseSimulationEnv):
                 self.instance, self.revolute_joint, self.revolute_joint_index = None, None, None
             self.i = (self.i + 1) % len(self.instance_list)
             self.index = self.instance_list[self.i]
-            self.instance, self.revolute_joint, self.revolute_joint_index = self.load_instance(index=self.index)
-            self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle'])
-            self.handle_link = self.revolute_joint.get_child_link()
+            self.instance = self.load_instance(index=self.index)
+            # self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle'])
+            # self.handle_link = self.revolute_joint.get_child_link()
             self.instance_links = self.instance.get_links()
             self.instance_collision_links = [link for link in self.instance.get_links() if
                                            len(link.get_collision_shapes()) > 0]
             self.instance_base_link = [link for link in self.instance.get_links() if link.get_name() == 'link_1'][0] # link_1 is the base link
-            self.handle_id = self.handle_link.get_id()
-            self.instance_ids_without_handle = [link.get_id() for link in self.instance_links]
-            self.instance_ids_without_handle.remove(self.handle_id) ############## WHY? #################
-            if not self.handle2link_relative_pose_dict.__contains__(self.index):
-                self.handle2link_relative_pose_dict[self.index] = self.update_handle_relative_pose()
+            # self.handle_id = self.handle_link.get_id()
+            # self.instance_ids_without_handle = [link.get_id() for link in self.instance_links]
+            # self.instance_ids_without_handle.remove(self.handle_id) ############## WHY? #################
+            # if not self.handle2link_relative_pose_dict.__contains__(self.index):
+            #     self.handle2link_relative_pose_dict[self.index] = self.update_handle_relative_pose()
 
         pos = self.pos  # can add noise here to randomize loaded position
         orn = transforms3d.euler.euler2quat(0, 0, 0)
@@ -180,13 +180,32 @@ class USBEnv(BaseSimulationEnv):
 
 
 if __name__ == "__main__":
-    env = USBEnv(index = 0)
+    env = USBEnv(index = -1)
     # env.create_table()
     env.scene.add_ground(altitude=-0.6)
-    viewer = env.create_viewer()
-    load_robot(env.scene, "allegro_hand_xarm6_wrist_mounted_face_front")
-    
-    while not viewer.closed:
+    env.viewer = env.create_viewer()
+    robot_left = load_robot(env.scene, "allegro_hand_xarm6_left")
+    left_pose = sapien.Pose(np.array([-0.0, 0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
+    robot_left.set_pose(left_pose)
+
+    print("left arm:", len(robot_left.get_active_joints()))
+
+    robot_right = load_robot(env.scene, "allegro_hand_xarm6_right")
+    right_pose = sapien.Pose(np.array([-0.0, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
+    robot_right.set_pose(right_pose)
+    print("right arm:", len(robot_right.get_active_joints()))
+
+    i = 0
+    while not env.viewer.closed:
+        if i % 1000 == 0:
+            env.reset_env()
+
+        hand_init = [0] * 16
+        arm_left = [0, 0, 0, 0, 0, -3.1415]
+        arm_right = [0, 0, 0, 0, 0, -3.14 / 2]
+        robot_left.set_qpos(arm_left + hand_init)
+        robot_right.set_qpos(arm_right + hand_init)
         env.scene.step()
         env.scene.update_render()
         env.render()
+        i = i + 1

@@ -62,6 +62,19 @@ def generate_arm_robot_hand_info() -> Dict[str, ArmRobotInfo]:
     )
     return info_dict
 
+def generate_bimanual_robot_info() -> Dict[str, ArmRobotInfo]:
+    allegro_hand_xarm6_right = ArmRobotInfo(path="robot/xarm6/xarm6_allegro_right_2023.urdf", hand_dof=16, arm_dof=6,
+                                            palm_name="palm_center", arm_init_qpos=[0, 0, 0, 0, -np.pi / 2, 0],
+                                            root_offset=[0, 0, 0])
+    allegro_hand_xarm6_left = ArmRobotInfo(path="robot/xarm6/xarm6_allegro_left_2023.urdf", hand_dof=16, arm_dof=6,
+                                             palm_name="palm_center", arm_init_qpos=[0, 0, 0, 0, -np.pi / 2, 0],
+                                             root_offset=[0, 0, 0])
+    info_dict = dict(
+        allegro_hand_xarm6_right=allegro_hand_xarm6_right,
+        allegro_hand_xarm6_left=allegro_hand_xarm6_left,
+    )
+    return info_dict
+
 
 def generate_retargeting_link_names(robot_name):
     if "shadow_hand" in robot_name or "adroit_hand" in robot_name:
@@ -95,6 +108,8 @@ def load_robot(scene: sapien.Scene, robot_name, disable_self_collision=True) -> 
     package_dir = (current_dir.parent.parent / "assets").resolve()
     if "free" in robot_name:
         info = generate_free_robot_hand_info()[robot_name]
+    elif "left" in robot_name or "right" in robot_name:
+        info = generate_bimanual_robot_info()[robot_name]
     else:
         info = generate_arm_robot_hand_info()[robot_name]
     robot_file = info.path
