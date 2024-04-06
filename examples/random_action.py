@@ -24,9 +24,12 @@ if __name__ == "__main__":
     viewer.focus_camera(env.cameras['instance_1'])
     env.viewer = viewer
 
+    action = np.random.random(robot_dof)
     while True:
-        for i in range(100):
-            env.step(np.random.random(robot_dof))
+        for i in range(10000):
+            if i % 100 == 0:
+                action = np.random.random(robot_dof)
+            env.step(action)
             env.render()
         env.reset()
 
