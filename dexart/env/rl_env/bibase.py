@@ -1,19 +1,22 @@
 from abc import abstractmethod
 from typing import Dict, Optional, Callable, List, Union, Tuple
+from enum import Enum, auto
 
 import gym
 import numpy as np
 import sapien.core as sapien
 import transforms3d
+import torch
 
 from dexart.env.rl_env.pc_processing import process_pc
 from dexart.env.sim_env.base import BaseSimulationEnv
 from dexart.env.sim_env.constructor import add_default_scene_light
 from dexart.utils.kinematics_helper import PartialKinematicModel
 from dexart.utils.common_robot_utils import load_robot, generate_arm_robot_hand_info, \
-    generate_free_robot_hand_info, FreeRobotInfo, ArmRobotInfo
+    generate_free_robot_hand_info, generate_bimanual_robot_info, FreeRobotInfo, ArmRobotInfo
 from dexart.utils.random_utils import np_random
 from dexart.utils.render_scene_utils import actor_to_open3d_mesh
+from dexart.env.rl_env.base import BaseRLEnv
 
 VISUAL_OBS_RETURN_TORCH = False
 MAX_DEPTH_RANGE = 2.5
@@ -24,8 +27,16 @@ def recover_action(action, limit):
     action = (action + 1) / 2 * (limit[:, 1] - limit[:, 0]) + limit[:, 0]
     return action
 
+class GraspState(Enum):
+    REACHING = 1
+    GRASPING = 2
+    GRASPED = 3
 
-class BaseRLEnv(BaseSimulationEnv, gym.Env):
+class RobotId(Enum):
+    LEFT = auto()
+    RIGHT = auto()
+
+class BaseBimanualRLEnv(BaseRLEnv):
     def __init__(self, use_gui=True, frame_skip=5, use_visual_obs=False, renderer: str = "sapien", **renderer_kwargs):
         # Do not write any meaningful in this __init__ function other than type definition,
         # Since multiple parents are presented for the child RLEnv class
@@ -61,6 +72,37 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.ee_link: Optional[sapien.Actor] = None
         self.cartesian_error = None
 
+        ## FOR LEFT ARM
+        # Visual staff for offscreen rendering
+        self.camera_infos_l: Dict[str, Dict] = {}
+        self.camera_pose_noise_l: Dict[
+            str, Tuple[Optional[float], sapien.Pose]] = {}  # tuple for noise level and original camera pose
+        self.imagination_infos_l: Dict[str, float] = {}
+        self.imagination_data_l: Dict[str, Dict[str, Tuple[sapien.ActorBase, np.ndarray, int]]] = {}
+        self.need_flush_when_change_instance_l = False
+        self.imaginations_l: Dict[str, np.ndarray] = {}
+        self.eval_cam_names_l = renderer_kwargs['eval_cam_names'] if renderer_kwargs.__contains__(
+            "eval_cam_names") else None
+        self.use_history_obs_l = renderer_kwargs['use_history_obs'] if renderer_kwargs.__contains__(
+            'use_history_obs') else False
+        self.last_obs_l = None
+
+        # RL related attributes
+        self.is_robot_free_l: Optional[bool] = None
+        self.arm_dof_l: Optional[int] = None
+        self.rl_step_l: Optional[Callable] = None
+        self.get_observation_l: Optional[Callable] = None
+        self.robot_collision_links_l: Optional[List[sapien.Actor]] = None
+        self.robot_info_l: Optional[Union[ArmRobotInfo, FreeRobotInfo]] = None
+        self.velocity_limit_l: Optional[np.ndarray] = None
+        self.kinematic_model_l: Optional[PartialKinematicModel] = None
+
+        # Robot cache
+        self.control_time_step_l = None
+        self.ee_link_name_l = None
+        self.ee_link_l: Optional[sapien.Actor] = None
+        self.cartesian_error_l = None
+
     def seed(self, seed=None):
         self.np_random, seed = np_random(seed)
         return [seed]
@@ -89,7 +131,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
     @property
     def action_dim(self):
-        return self.robot.dof
+        return self.robot.dof+self.robot_l.dof
 
     @property
     @abstractmethod
@@ -97,11 +139,21 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         return 0
 
     def setup(self, robot_name):
-        self.robot_name = robot_name
+        assert len(robot_name)==2, f"name of TWO robots should be given, received {len(robot_name)}: {robot_name}"
+        self.robot_name_l = robot_name_l = robot_name[1]
+        self.robot_name = robot_name = robot_name[0]
+
+        self.robot_l = load_robot(self.scene, robot_name_l, disable_self_collision=False)
         self.robot = load_robot(self.scene, robot_name, disable_self_collision=False)
-        self.robot.set_pose(sapien.Pose(np.array([0, 0, -5])))
+
+        # initial pos will be override in taskRLEnv
+        self.robot_l.set_pose(sapien.Pose(np.array([-0.5, 0.5, 0])))
+        self.robot.set_pose(sapien.Pose(np.array([-0.5, -0.5, 0])))
+
+
         self.is_robot_free = "free" in robot_name
         if self.is_robot_free:
+            raise NotImplementedError("Free robot is not supported in bimanual environment.")
             info = generate_free_robot_hand_info()[robot_name]
             velocity_limit = np.array([1.0] * 3 + [1.57] * 3 + [3.14] * (self.robot.dof - 6))
             self.velocity_limit = np.stack([-velocity_limit, velocity_limit], axis=1)
@@ -109,7 +161,19 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             self.robot.set_pose(init_pose)
             self.arm_dof = 0
         else:
-            info = generate_arm_robot_hand_info()[robot_name]
+            # put left at first incase mistakenly use right version varibles
+            info_l = generate_bimanual_robot_info()[robot_name_l]
+            self.arm_dof_l = info_l.arm_dof
+            hand_dof_l = info_l.hand_dof
+            velocity_limit_l = np.array([1] * 3 + [1] * 3 + [np.pi] * hand_dof_l)
+            self.velocity_limit_l = np.stack([-velocity_limit_l, velocity_limit_l], axis=1)
+            start_joint_name_l = self.robot_l.get_joints()[1].get_name()
+            end_joint_name_l = self.robot_l.get_active_joints()[self.arm_dof_l - 1].get_name()
+            self.kinematic_model_l = PartialKinematicModel(self.robot_l, start_joint_name_l, end_joint_name_l)
+            self.ee_link_name_l = self.kinematic_model_l.end_link_name
+            self.ee_link_l = [link for link in self.robot_l.get_links() if link.get_name() == self.ee_link_name_l][0]
+
+            info = generate_bimanual_robot_info()[robot_name]
             self.arm_dof = info.arm_dof
             hand_dof = info.hand_dof
             velocity_limit = np.array([1] * 3 + [1] * 3 + [np.pi] * hand_dof)
@@ -119,6 +183,11 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             self.kinematic_model = PartialKinematicModel(self.robot, start_joint_name, end_joint_name)
             self.ee_link_name = self.kinematic_model.end_link_name
             self.ee_link = [link for link in self.robot.get_links() if link.get_name() == self.ee_link_name][0]
+
+
+        self.robot_info_l = info_l
+        self.robot_collision_links_l = [link for link in self.robot_l.get_links() if len(link.get_collision_shapes()) > 0]
+        self.control_time_step_l = self.scene.get_timestep() * self.frame_skip
 
         self.robot_info = info
         self.robot_collision_links = [link for link in self.robot.get_links() if len(link.get_collision_shapes()) > 0]
@@ -139,6 +208,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             self.get_observation = self.get_oracle_state
 
     def free_sim_step(self, action: np.ndarray):
+        raise NotImplementedError("Free robot is not supported in bimanual environment.")
         target_qvel = recover_action(action, self.velocity_limit)
         target_qvel[6:] = 0
         target_qpos = np.concatenate([np.zeros(6), recover_action(action[6:], self.robot.get_qlimits()[6:])])
@@ -150,7 +220,44 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             self.scene.step()
         self.current_step += 1
 
+    def split_action(self, action: np.ndarray):
+        """
+        returned action and action_l should be in form of 
+        [x_vel,y_vel,z_vel,roll_vel,pitch_vel,yaw_vel,hand_joint_angles]
+        """
+        # temporary solution for split action, two arm do the same
+        action_l = action.copy()
+        assert action.shape[0] == action_l.shape[0]
+
+        #TODO: split action into two parts =====  need test, for all functions
+        # raise NotImplementedError("split the action into two parts is not handled yet.") 
+        #action_len = action.shape[0]//2
+        #action, action_l = action[:action_len], action[action_len:]
+        return action, action_l
+
     def arm_sim_step(self, action: np.ndarray):
+        action, action_l = self.split_action(action)
+
+        current_qpos_l = self.robot_l.get_qpos()
+        ee_link_last_pose_l = self.ee_link_l.get_pose()
+        action_l = np.clip(action_l, -1, 1)
+        target_root_velocity_l = recover_action(action_l[:6], self.velocity_limit_l[:6])
+        palm_jacobian_l = self.kinematic_model_l.compute_end_link_spatial_jacobian(current_qpos_l[:self.arm_dof_l])
+        arm_qvel_l = compute_inverse_kinematics(target_root_velocity_l, palm_jacobian_l)[:self.arm_dof_l]
+        arm_qvel_l = np.clip(arm_qvel_l, -np.pi / 1, np.pi / 1)
+        arm_qpos_l = arm_qvel_l * self.control_time_step + self.robot_l.get_qpos()[:self.arm_dof_l]
+
+        hand_qpos_l = recover_action(action_l[6:], self.robot_l.get_qlimits()[self.arm_dof_l:])
+        # allowed_hand_motion = self.velocity_limit[6:] * self.control_time_step
+        # hand_qpos = np.clip(hand_qpos, current_qpos[6:] + allowed_hand_motion[:, 0],
+        #                     current_qpos[6:] + allowed_hand_motion[:, 1])
+        target_qpos_l = np.concatenate([arm_qpos_l, hand_qpos_l])
+        target_qvel_l = np.zeros_like(target_qpos_l)
+        target_qvel_l[:self.arm_dof_l] = arm_qvel_l
+        self.robot_l.set_drive_target(target_qpos_l)
+        self.robot_l.set_drive_velocity_target(target_qvel_l)
+
+
         current_qpos = self.robot.get_qpos()
         ee_link_last_pose = self.ee_link.get_pose()
         action = np.clip(action, -1, 1)
@@ -171,9 +278,14 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.robot.set_drive_velocity_target(target_qvel)
 
         for i in range(self.frame_skip):
+            self.robot_l.set_qf(self.robot_l.compute_passive_force(external=False, coriolis_and_centrifugal=False))
             self.robot.set_qf(self.robot.compute_passive_force(external=False, coriolis_and_centrifugal=False))
             self.scene.step()
         self.current_step += 1
+
+        ee_link_new_pose_l = self.ee_link_l.get_pose()
+        relative_pos_l = ee_link_new_pose_l.p - ee_link_last_pose_l.p
+        self.cartesian_error_l = np.linalg.norm(relative_pos_l - target_root_velocity_l[:3] * self.control_time_step)
 
         ee_link_new_pose = self.ee_link.get_pose()
         relative_pos = ee_link_new_pose.p - ee_link_last_pose.p
@@ -186,6 +298,17 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             action: robot arm spatial velocity plus robot hand joint angles
 
         """
+        action, action_l = self.split_action(action)
+        
+        target_root_velocity_l = recover_action(action_l[:6], self.velocity_limit_l[:6])
+        palm_jacobian_l = self.kinematic_model_l.compute_end_link_spatial_jacobian(self.robot_l.get_qpos()[:self.arm_dof_l])
+        arm_qvel_l = compute_inverse_kinematics(target_root_velocity_l, palm_jacobian_l)[:self.arm_dof_l]
+        arm_qvel_l = np.clip(arm_qvel_l, -np.pi, np.pi)
+        arm_qpos_l = arm_qvel_l * self.scene.timestep * self.frame_skip + self.robot_l.get_qpos()[:self.arm_dof_l]
+        target_qpos_l = np.concatenate([arm_qpos_l, recover_action(action_l[6:], self.robot_l.get_qlimits()[self.arm_dof_l:])])
+        self.robot_l.set_qpos(target_qpos_l)
+        # self.current_step += 1
+
         target_root_velocity = recover_action(action[:6], self.velocity_limit[:6])
         palm_jacobian = self.kinematic_model.compute_end_link_spatial_jacobian(self.robot.get_qpos()[:self.arm_dof])
         arm_qvel = compute_inverse_kinematics(target_root_velocity, palm_jacobian)[:self.arm_dof]
@@ -229,21 +352,68 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         return obs, reward, done, info
 
     def configure_robot_contact_reward(self):
+        # raise NotImplementedError("configure_robot_contact_reward is not implemented yet.")
         if self.is_robot_free:
-            info = generate_free_robot_hand_info()[self.robot_name]
+            info_l = generate_free_robot_hand_info()[self.robot_name_l]
         else:
-            info = generate_arm_robot_hand_info()[self.robot_name]
-        robot_link_names = [link.get_name() for link in self.robot.get_links()]
-        robot_links = self.robot.get_links()
+            info_l = generate_bimanual_robot_info()[self.robot_name_l]
+        robot_link_names_l = [link.get_name() for link in self.robot_l.get_links()]
+        robot_links_l = self.robot_l.get_links()
         # configure palm
-        self.palm_link_name = info.palm_name
-        self.palm_link = [link for link in self.robot.get_links() if link.get_name() == 'base_link'][0]
+        self.palm_link_name_l = info_l.palm_name
+        self.palm_link_l = [link for link in self.robot_l.get_links() if link.get_name() == 'base_link'][0]
         # configure fingers
         finger_tip_names = ["link_15.0_tip", "link_3.0_tip", "link_7.0_tip", "link_11.0_tip"]
         thumb_link_name = ["link_15.0_tip", "link_15.0", "link_14.0"]
         index_link_name = ["link_3.0_tip", "link_3.0", "link_2.0", "link_1.0"]
         middle_link_name = ["link_7.0_tip", "link_7.0", "link_6.0", "link_5.0"]
         ring_link_name = ["link_11.0_tip", "link_11.0", "link_10.0", "link_9.0"]
+        self.thumb_links_l = [robot_links_l[robot_link_names_l.index(name)] for name in thumb_link_name]
+        self.index_links_l = [robot_links_l[robot_link_names_l.index(name)] for name in index_link_name]
+        self.middle_links_l = [robot_links_l[robot_link_names_l.index(name)] for name in middle_link_name]
+        self.ring_links_l = [robot_links_l[robot_link_names_l.index(name)] for name in ring_link_name]
+        self.finger_tip_links_l = [robot_links_l[robot_link_names_l.index(name)] for name in finger_tip_names]
+        self.finger_contact_links_l = self.thumb_links_l + self.index_links_l + self.middle_links_l + self.ring_links_l
+        self.finger_contact_ids_l = np.array([0] * 3 + [1] * 4 + [2] * 4 + [3] * 4 + [4])
+        self.finger_tip_pos_l = np.zeros([len(finger_tip_names), 3])
+        self.finger_reward_scale_l = np.ones(len(self.finger_tip_links_l)) * 0.01
+        self.finger_reward_scale_l[0] = 0.04
+        # configure arm
+        arm_contact_link_name = ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]
+        self.arm_contact_links_l = [self.robot_l.get_links()[robot_link_names_l.index(name)] for name in
+                                  arm_contact_link_name]
+        self.robot_object_contact_l = np.zeros(len(finger_tip_names) + 1)  # contact buffer of four tip and palm
+        self.robot_object_contact_handle_l = np.zeros(len(finger_tip_names) + 1)
+        self.robot_object_contact_no_handle_l = np.zeros(len(finger_tip_names) + 1)
+        self.hand_base_contact_l = np.zeros(len(finger_tip_names) + 1)
+        self.robot_instance_base_contact_l = np.zeros(len(finger_tip_names) + 1)
+        # configure hand / palm /robot id (for segmentation)
+        self.thumb_ids_l = [link.get_id() for link in self.thumb_links_l] + [
+            robot_links_l[robot_link_names_l.index("link_13.0")].get_id()]
+        self.index_ids_l = [link.get_id() for link in self.index_links_l] + [
+            robot_links_l[robot_link_names_l.index("link_0.0")].get_id()]
+        self.middle_ids_l = [link.get_id() for link in self.middle_links_l] + [
+            robot_links_l[robot_link_names_l.index("link_4.0")].get_id()]
+        self.ring_ids_l = [link.get_id() for link in self.ring_links_l] + [
+            robot_links_l[robot_link_names_l.index("link_8.0")].get_id()]
+        self.palm_id_l = [self.palm_link_l.get_id()] + [robot_links_l[robot_link_names_l.index("link_12.0")].get_id()]
+
+
+        if self.is_robot_free:
+            info = generate_free_robot_hand_info()[self.robot_name]
+        else:
+            info = generate_bimanual_robot_info()[self.robot_name]
+        robot_link_names = [link.get_name() for link in self.robot.get_links()]
+        robot_links = self.robot.get_links()
+        # configure palm
+        self.palm_link_name = info.palm_name
+        self.palm_link = [link for link in self.robot.get_links() if link.get_name() == 'base_link'][0]
+        # configure fingers
+        # finger_tip_names = ["link_15.0_tip", "link_3.0_tip", "link_7.0_tip", "link_11.0_tip"]
+        # thumb_link_name = ["link_15.0_tip", "link_15.0", "link_14.0"]
+        # index_link_name = ["link_3.0_tip", "link_3.0", "link_2.0", "link_1.0"]
+        # middle_link_name = ["link_7.0_tip", "link_7.0", "link_6.0", "link_5.0"]
+        # ring_link_name = ["link_11.0_tip", "link_11.0", "link_10.0", "link_9.0"]
         self.thumb_links = [robot_links[robot_link_names.index(name)] for name in thumb_link_name]
         self.index_links = [robot_links[robot_link_names.index(name)] for name in index_link_name]
         self.middle_links = [robot_links[robot_link_names.index(name)] for name in middle_link_name]
@@ -255,7 +425,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.finger_reward_scale = np.ones(len(self.finger_tip_links)) * 0.01
         self.finger_reward_scale[0] = 0.04
         # configure arm
-        arm_contact_link_name = ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]
+        # arm_contact_link_name = ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]
         self.arm_contact_links = [self.robot.get_links()[robot_link_names.index(name)] for name in
                                   arm_contact_link_name]
         self.robot_object_contact = np.zeros(len(finger_tip_names) + 1)  # contact buffer of four tip and palm
@@ -276,6 +446,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
     @property
     def grouping_info(self):
+        raise NotImplementedError("grouping_info is not implemented yet. Need configure_robot_contact_reward. How to return info of two arm")
         return {
             'handle': self.handle_id,
             'instance_body': self.instance_ids_without_handle,  # include handle
@@ -572,6 +743,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                         # ic(obs.shape)
                         camera_pose = self.get_camera_to_robot_pose(name)
                         kwargs = camera_cfg["point_cloud"].get("process_fn_kwargs", {})
+                        # TODO: merge the observation of 
                         obs = process_pc(task_name=self.task_config_name, cloud=obs, camera_pose=camera_pose,
                                          num_points=camera_cfg['point_cloud']['num_points'], np_random=self.np_random,
                                          grouping_info=None, segmentation=None, **kwargs)  # N * 3
@@ -594,6 +766,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         return obs_dict
 
     def get_camera_to_robot_pose(self, camera_name):
+        # raise NotImplementedError("get_camera_to_robot_pose is not implemented yet. two robot pose")
         gl_pose = self.cameras[camera_name].get_pose()
         camera_pose = gl_pose * gl2sapien
         camera2robot = self.robot.get_pose().inv() * camera_pose

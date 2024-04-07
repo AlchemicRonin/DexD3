@@ -3,18 +3,25 @@ import os
 from functools import cached_property
 from pathlib import Path
 from typing import Optional, Dict
+from enum import Enum, auto
 
 import numpy as np
 import sapien.core as sapien
 import transforms3d
 
-from dexart.env.rl_env.base import BaseRLEnv
+# from dexart.env.rl_env.base import BaseRLEnv
+from dexart.env.rl_env.bibase import BaseBimanualRLEnv
 from dexart.env.sim_env.constructor import add_default_scene_light
 from dexart.env.sim_env.laptop_env import LaptopEnv
 from dexart.env import task_setting
 
 
-class LaptopRLEnv(LaptopEnv, BaseRLEnv):
+class GraspState(Enum):
+    REACHING = 1
+    GRASPING = 2
+    GRASPED = 3
+
+class LaptopRLEnv(LaptopEnv, BaseBimanualRLEnv):
     def __init__(self, use_gui=False, frame_skip=5, robot_name="adroit_hand_free", friction=5, index=0, rand_pos=0.0,
                  rand_orn=0.0, **renderer_kwargs):
         super().__init__(use_gui, frame_skip, friction=friction, index=index, **renderer_kwargs)
@@ -28,8 +35,12 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         # ============== will not change during training and randomize instance ==============
         self.robot_name = robot_name
         self.setup(robot_name)
-        self.robot_init_pose = sapien.Pose(np.array([-0.5, 0, 0]), transforms3d.euler.euler2quat(0, 0, 0))
+        self.robot_init_pose_l = sapien.Pose(np.array([-0.5, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
+        self.robot_l.set_pose(self.robot_init_pose_l)
+
+        self.robot_init_pose = sapien.Pose(np.array([-0.5, 0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
         self.robot.set_pose(self.robot_init_pose)
+
         self.configure_robot_contact_reward()
         self.robot_annotation = self.setup_robot_annotation(robot_name)
         # ============== will change if randomize instance ==============
@@ -60,11 +71,11 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.palm_w = self.palm_link.get_angular_velocity()
         self.height = self.instance.get_pose().p[2]
         if np.linalg.norm(self.palm_pose.p - self.handle_pose.p) > 0.2:  # Reaching
-            self.state = 1
+            self.state = GraspState.REACHING
         elif not self.is_contact:
-            self.state = 2
+            self.state = GraspState.GRASPING
         else:
-            self.state = 3
+            self.state = GraspState.GRASPED
         self.early_done = (self.progress > 0.95) and (self.state == 3)
         self.is_eval_done = (self.progress > 0.95) and (self.state == 3)
 
@@ -81,16 +92,16 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
 
     def get_reward(self, action):
         reward = 0
-        if self.state == 1:
+        if self.state == GraspState.REACHING:
             reward = -0.1 * min(np.linalg.norm(self.palm_pose.p - self.handle_pose.p), 0.5)  # encourage palm be close to handle
             if self.progress < 0:
                 reward += 0.5 * self.progress
-        elif self.state == 2:
+        elif self.state == GraspState.GRASPING:
             reward += 0.2 * (int(self.is_contact))
             reward -= 0.1 * (int(self.is_arm_contact))
             if self.progress < 0:
                 reward += 0.5 * self.progress
-        elif self.state == 3:
+        elif self.state == GraspState.GRASPED:
             reward += 0.2 * (int(self.is_contact))
             reward -= 0.1 * (int(self.is_arm_contact))
             reward += 1.0 * self.progress
@@ -103,6 +114,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
 
     def reset(self, *, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None):
         # reset status
+        self.robot_l.set_pose(self.robot_init_pose_l)
         self.robot.set_pose(self.robot_init_pose)
         # reset changeable status if randomize instance
         self.reset_internal()   # change instance if randomize instance

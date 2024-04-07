@@ -135,6 +135,20 @@ class BaseSimulationEnv(object):
     def check_actor_pair_contacts_in_distances(self, actors1: List[sapien.Actor], actor2: sapien.Actor,
                                                centers: List[np.ndarray], radii: List[float],
                                               impulse_threshold=1e-2, reverse=False) -> np.ndarray:
+        """Check if the actor pair contacts and the contact points are over/within the distance to centers.
+
+        Args:
+            actors1 (List[sapien.Actor]): Actors to check.
+            actor2 (sapien.Actor): Actor to check.
+            centers (List[np.ndarray]): Centers that the contact points to be compared with. Same length as actors1.
+            radii (List[float]): Distance threshold for each center.
+            impulse_threshold (_type_, optional): Threshold to check if actors contact. Defaults to 1e-2.
+            reverse (bool, optional): Over the distance when false. Defaults to False.
+
+        Returns:
+            np.ndarray: 1/0 array indicating if the actors in actors1 contacts with actor2 
+                        and the contact points are over/within the distance to centers.
+        """
         actor_set1 = set(actors1)
         contact_buffer = np.zeros(len(actors1))
         for contact in self.scene.get_contacts():
@@ -159,6 +173,9 @@ class BaseSimulationEnv(object):
     def check_actors_pair_contacts_in_distance(self, actors1: List[sapien.Actor], actors2: List[sapien.Actor],
                                                centers: List[np.ndarray], radii: List[float],
                                                impulse_threshold=1e-2, reverse=False) -> np.ndarray:
+        """
+        Check every actor in actors1 whether contacts with any actor in actors2 and the contact points are over/within the distance to centers.
+        """
         contact_buffer = np.zeros(len(actors1))
         for actor2 in actors2:
             contact_buffer_local = self.check_actor_pair_contacts_in_distances(actors1, actor2, centers, radii,

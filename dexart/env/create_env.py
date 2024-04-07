@@ -13,7 +13,8 @@ from dexart.env.sim_env.constructor import add_default_scene_light
 def create_env(task_name, use_visual_obs, use_gui=False, is_eval=False, pc_seg=False,
                pc_noise=False, index=-1, img_type=None, rand_pos=0.0, rand_degree=0, frame_skip=10,
                **kwargs):
-    robot_name = "allegro_hand_xarm6_wrist_mounted_face_front"
+    # robot_name = "allegro_hand_xarm6_wrist_mounted_face_front" 
+    robot_name = ["allegro_hand_xarm6_right","allegro_hand_xarm6_left"]
     rotation_reward_weight = 1
     env_params = dict(robot_name=robot_name, rotation_reward_weight=rotation_reward_weight,
                       use_visual_obs=use_visual_obs, use_gui=use_gui, no_rgb=True, use_old_api=True,
