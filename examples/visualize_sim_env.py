@@ -10,7 +10,7 @@ def main(task_name: str) -> None:
     if task_name == "laptop":
         env = LaptopEnv(index=-1)
     elif task_name == "pen":
-        env = PenEnv(index=-1)
+        env = PenEnv(index=-1, friction=100000)
     else:
         raise ValueError(f"Unknown task name: {task_name}")
     env.seed(0)
