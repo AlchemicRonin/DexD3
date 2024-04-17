@@ -1,6 +1,5 @@
 assets/misc
 assets/rl_checkpoints
-assets/robot
 assets/vision_pretrain
 
 assets/annotation/*
@@ -9,6 +8,9 @@ assets/annotation/*
 assets/sapien/*
 !assets/sapien/101685
 !assets/sapien/101732
+
+assets/robot/*
+!assets/robot/atlas_description
 
 __pycache__/
 *.egg-info/
