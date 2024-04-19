@@ -9,7 +9,7 @@ import numpy as np
 import sapien.core as sapien
 import transforms3d
 
-# from dexart.env.rl_env.base import BaseRLEnv
+from dexart.env.rl_env.base import BaseRLEnv
 from dexart.env.rl_env.bibase import BaseBimanualRLEnv
 from dexart.env.sim_env.constructor import add_default_scene_light
 from dexart.env.sim_env.laptop_env import LaptopEnv
@@ -21,7 +21,8 @@ class GraspState(Enum):
     GRASPING = 2
     GRASPED = 3
 
-class LaptopRLEnv(LaptopEnv, BaseBimanualRLEnv):
+# class LaptopRLEnv(LaptopEnv, BaseBimanualRLEnv):
+class LaptopRLEnv(LaptopEnv, BaseRLEnv):
     def __init__(self, use_gui=False, frame_skip=5, robot_name="adroit_hand_free", friction=5, index=0, rand_pos=0.0,
                  rand_orn=0.0, **renderer_kwargs):
         super().__init__(use_gui, frame_skip, friction=friction, index=index, **renderer_kwargs)
@@ -35,8 +36,8 @@ class LaptopRLEnv(LaptopEnv, BaseBimanualRLEnv):
         # ============== will not change during training and randomize instance ==============
         self.robot_name = robot_name
         self.setup(robot_name)
-        self.robot_init_pose_l = sapien.Pose(np.array([-0.5, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
-        self.robot_l.set_pose(self.robot_init_pose_l)
+        # self.robot_init_pose_l = sapien.Pose(np.array([-0.5, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
+        # self.robot_l.set_pose(self.robot_init_pose_l)
 
         self.robot_init_pose = sapien.Pose(np.array([-0.5, 0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
         self.robot.set_pose(self.robot_init_pose)
@@ -114,7 +115,7 @@ class LaptopRLEnv(LaptopEnv, BaseBimanualRLEnv):
 
     def reset(self, *, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None):
         # reset status
-        self.robot_l.set_pose(self.robot_init_pose_l)
+        # self.robot_l.set_pose(self.robot_init_pose_l)
         self.robot.set_pose(self.robot_init_pose)
         # reset changeable status if randomize instance
         self.reset_internal()   # change instance if randomize instance

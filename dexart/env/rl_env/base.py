@@ -512,6 +512,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                     texture_names.append("Segmentation")
                 else:
                     raise ValueError(f"Visual modality {modality} not supported.")
+            # NOTE: sepian cam details in https://sapien.ucsd.edu/docs/latest/tutorial/rendering/camera.html
             await_dl_list = cam.take_picture_and_get_dl_tensors_async(texture_names)  # how is this done?
             dl_list = await_dl_list.wait()
 
@@ -521,8 +522,10 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                 if modality == "point_cloud" and camera_cfg["point_cloud"].get("use_seg") is True:
                     import torch
                     dl_tensor_seg = dl_list[i]
+                    # [H,W,4], 4 = 1 (mesh-level-seg) + 1 (actor-level-seg) + 2 (unknown but all zero)
                     output_array_seg = torch.from_dlpack(dl_tensor_seg).cpu().numpy()
                     i += 1
+                    # ???: why not use the same as output_array_seg?
                     dl_tensor_pos = dl_list[i]
                     shape = sapien.dlpack.dl_shape(dl_tensor_pos)
                     output_array_pos = np.zeros(shape, dtype=np.float32)
@@ -533,7 +536,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                         output_array_pos[..., :3],  # H, W, 3
                         (-1, 3))
                     obs_seg = np.reshape(
-                        output_array_seg[..., 1:2],  # H, W, 1
+                        output_array_seg[..., 1:2],  # H, W, 1 (actor-level-seg)
                         (-1, 1))
                     camera_pose = self.get_camera_to_robot_pose(name)
                     kwargs = camera_cfg["point_cloud"].get("process_fn_kwargs", {})

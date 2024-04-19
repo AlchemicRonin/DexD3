@@ -36,6 +36,7 @@ def process_pc(task_name: str, cloud: np.ndarray, camera_pose: np.ndarray, num_p
     if num_index == 0:
         return np.zeros([num_points, 3])
     if num_index < num_points:
+        # repeat first point as padding at the end
         indices = np.concatenate([within_bound, np.ones(num_points - num_index, dtype=np.int32) * within_bound[0]])
         if noise_level != 0:
             multiplicative_noise = 1 + np_random.randn(num_index)[:, None] * 0.01 * noise_level  # (num_index, 1)
@@ -62,13 +63,14 @@ def process_pc(task_name: str, cloud: np.ndarray, camera_pose: np.ndarray, num_p
             instance_body_mask = np.logical_or(labels == instance_body_id, instance_body_mask)
 
         # group the arm
+        #TODO: the dual-arm version joints should handdle, see BaseRLEnv.configure_robot_contact_reward for details  
         arm_mask = np.logical_and(labels < grouping_info['palm'][0], labels > grouping_info['palm'][0] - 8)  # 13, [6,12]
         hand_mask = (labels == grouping_info['palm'][0])
         for instance in grouping_info['palm'] + grouping_info['thumb'] + grouping_info['index'] + grouping_info['middle'] + grouping_info['ring']:
             hand_mask = np.logical_or(labels == instance, hand_mask)
 
-        cloud = np.concatenate([pc, handle_mask, instance_body_mask, hand_mask, arm_mask], axis=1)
         # (N, 7) == (N, xyz + 4masks)
+        cloud = np.concatenate([pc, handle_mask, instance_body_mask, hand_mask, arm_mask], axis=1)
 
     return cloud
 
