@@ -101,6 +101,40 @@ def wrap_link_hand_indices(link_hand_indices, method="tip_middle"):
         raise NotImplementedError
     return result
 
+def load_atlas(scene: sapien.Scene, disable_self_collision=True) -> sapien.Articulation:
+    loader = scene.create_urdf_loader()
+    current_dir = Path(__file__).parent
+    package_dir = (current_dir.parent.parent / "assets").resolve()
+    robot_file = "robot/atlas_description/urdf/atlas_allegro_right.urdf"
+    filename = str(package_dir / robot_file)
+    robot_builder = loader.load_file_as_articulation_builder(filename)
+    if disable_self_collision:
+        for link_builder in robot_builder.get_link_builders():
+            link_builder.set_collision_groups(1, 1, 17, 0)
+    robot = robot_builder.build(fix_root_link=True)
+    robot.set_pose(sapien.Pose(p=[-1, 0, -0.7]))
+    robot.set_name("atlas")
+
+    robot_arm_control_params = np.array([200000, 40000, 500])  # This PD is far larger than real to improve stability
+    root_translation_control_params = np.array([0, 200, 200])
+    root_rotation_control_params = np.array([0, 50, 50])
+    finger_control_params = np.array([200, 60, 10])
+    for joint in robot.get_active_joints():
+        name = joint.get_name()
+        if "arm" in name:
+            joint.set_drive_property(*(1 * robot_arm_control_params), mode="force")
+        else:
+            joint.set_drive_property(*(1 * finger_control_params), mode="force")
+
+    mat = scene.engine.create_physical_material(1.5, 1, 0.01)
+    for link in robot.get_links():
+        for geom in link.get_collision_shapes():
+            geom.min_patch_radius = 0.02
+            geom.patch_radius = 0.04
+            geom.set_physical_material(mat)
+    return robot
+
+
 
 def load_robot(scene: sapien.Scene, robot_name, disable_self_collision=True) -> sapien.Articulation:
     loader = scene.create_urdf_loader()

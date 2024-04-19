@@ -8,7 +8,7 @@ import transforms3d
 from dexart.env.sim_env.base import BaseSimulationEnv
 from dexart.env.task_setting import TASK_CONFIG
 import json
-from dexart.utils.common_robot_utils import load_robot
+from dexart.utils.common_robot_utils import load_robot, load_atlas
 
 
 class USBEnv(BaseSimulationEnv):
@@ -184,16 +184,10 @@ if __name__ == "__main__":
     # env.create_table()
     env.scene.add_ground(altitude=-0.6)
     env.viewer = env.create_viewer()
-    robot_left = load_robot(env.scene, "allegro_hand_xarm6_left")
-    left_pose = sapien.Pose(np.array([-0.0, 0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
-    robot_left.set_pose(left_pose)
+    atlas = load_atlas(env.scene)
 
-    print("left arm:", len(robot_left.get_active_joints()))
-
-    robot_right = load_robot(env.scene, "allegro_hand_xarm6_right")
-    right_pose = sapien.Pose(np.array([-0.0, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
-    robot_right.set_pose(right_pose)
-    print("right arm:", len(robot_right.get_active_joints()))
+    
+    print("active joints", len(atlas.get_active_joints()))
 
     i = 0
     while not env.viewer.closed:
@@ -201,10 +195,10 @@ if __name__ == "__main__":
             env.reset_env()
 
         hand_init = [0] * 16
-        arm_left = [0, 0, 0, 0, 0, -3.1415]
-        arm_right = [0, 0, 0, 0, 0, -3.14 / 2]
-        robot_left.set_qpos(arm_left + hand_init)
-        robot_right.set_qpos(arm_right + hand_init)
+        arm_left = [0, 0, 0, 0, 0, 0, 1]
+        arm_right = [0, 0, 0, 0, 0, 0, 1]
+        atlas.set_qpos(arm_left + arm_right + hand_init)
+
         env.scene.step()
         env.scene.update_render()
         env.render()
