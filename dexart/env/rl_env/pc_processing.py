@@ -70,6 +70,7 @@ def process_pc(task_name: str, cloud: np.ndarray, camera_pose: np.ndarray, num_p
             hand_mask = np.logical_or(labels == instance, hand_mask)
 
         # (N, 7) == (N, xyz + 4masks)
+        # TODO: add arm_right_mask and right_ball
         cloud = np.concatenate([pc, handle_mask, instance_body_mask, hand_mask, arm_mask], axis=1)
 
     return cloud

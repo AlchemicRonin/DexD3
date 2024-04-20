@@ -435,6 +435,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                     mat = pose.to_transformation_matrix()
                     transformed_points = points @ mat[:3, :3].T + mat[:3, 3][None, :]
                     seg_vector = np.zeros((1, 4))
+                    # TODO: change links to arms of the atlas version
                     if link_name in ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]:  # arm
                         seg_vector[0, 3] = 1
                     else:  # hand
@@ -547,6 +548,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                     obs_dict[f"{name}-seg_gt"] = obs[:, 3:]  # NOTE: add gt segmentation
                     if obs_dict[f"{name}-seg_gt"].shape != (camera_cfg["point_cloud"]["num_points"], 4):
                         # align the gt segmentation mask
+                        raise ValueError(f"FIGURE OUT WHY TI HAPPEN! \n Segmentation mask shape is not correct: {obs_dict[f'{name}-seg_gt'].shape}")
                         obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 4))
                     obs = obs[:, :3]
                 else:

@@ -7,7 +7,7 @@ import torch
 
 # train set: data/faucet_img/train.npy
 class SemSegDataset(Dataset):
-    def __init__(self, root_dir='../data/faucet', split='train', use_img=True, point_channel=3, half=False):
+    def __init__(self, root_dir='data/laptop', split='train', use_img=True, point_channel=3, half=False):
         self.root_dir = root_dir
         self.half = half
         self.split = split
@@ -37,7 +37,9 @@ class SemSegDataset(Dataset):
             points = sample[:, 0:self.point_channel]
             labels = np.argmax(sample[:, 3:], axis=1)
         else:
-            points = sample[0:512, 0:self.point_channel]  # NOTE: only use the first 7 channels including xyz + labels!! (imagination)
+            # NOTE: only use the first 7 channels including xyz + labels!! (imagination)
+            # TODO: 512 may change because of additional arm
+            points = sample[0:512, 0:self.point_channel]  
             labels = np.argmax(sample[0:512, 3:], axis=1)
         return torch.tensor(points), torch.tensor(labels)
 
