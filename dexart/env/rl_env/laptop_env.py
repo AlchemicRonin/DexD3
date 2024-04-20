@@ -21,7 +21,6 @@ class GraspState(Enum):
     GRASPING = 2
     GRASPED = 3
 
-# class LaptopRLEnv(LaptopEnv, BaseBimanualRLEnv):
 class LaptopRLEnv(LaptopEnv, BaseRLEnv):
     def __init__(self, use_gui=False, frame_skip=5, robot_name="adroit_hand_free", friction=5, index=0, rand_pos=0.0,
                  rand_orn=0.0, **renderer_kwargs):
@@ -39,13 +38,13 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         # self.robot_init_pose_l = sapien.Pose(np.array([-0.5, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
         # self.robot_l.set_pose(self.robot_init_pose_l)
 
-        self.robot_init_pose = sapien.Pose(np.array([-0.5, 0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
+        self.robot_init_pose = sapien.Pose(np.array([-1, 0, -1]), transforms3d.euler.euler2quat(0, 0, 0))
         self.robot.set_pose(self.robot_init_pose)
 
-        self.configure_robot_contact_reward()
-        self.robot_annotation = self.setup_robot_annotation(robot_name)
+        # self.configure_robot_contact_reward()
+        # self.robot_annotation = self.setup_robot_annotation(robot_name)
         # ============== will change if randomize instance ==============
-        self.reset()
+        self.simple_reset()
 
     def update_cached_state(self):
         for i, link in enumerate(self.finger_tip_links):
@@ -112,6 +111,13 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         controller_penalty = (self.cartesian_error ** 2) * 1e3
         reward -= 0.01 * (action_penalty + controller_penalty)
         return reward
+    
+    def simple_reset(self):
+        self.robot.set_pose(self.robot_init_pose)
+        self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle'])
+        # self.update_cached_state()
+        # self.update_imagination(reset_goal=False)
+        # return self.get_observation()
 
     def reset(self, *, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None):
         # reset status

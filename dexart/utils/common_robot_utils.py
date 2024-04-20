@@ -75,6 +75,15 @@ def generate_bimanual_robot_info() -> Dict[str, ArmRobotInfo]:
     )
     return info_dict
 
+def generate_atlas_info() -> Dict[str, ArmRobotInfo]:
+    atlas_info = ArmRobotInfo(path="robot/atlas_description/urdf/atlas_allegro_right.urdf", hand_dof=16, arm_dof=7,
+                              palm_name="palm_center", arm_init_qpos=[0, 0, 0, 0, -np.pi / 2, 0, 0],
+                              root_offset=[0, 0, 0])
+    info_dict = dict(
+        atlas=atlas_info,
+    )
+    return info_dict
+
 
 def generate_retargeting_link_names(robot_name):
     if "shadow_hand" in robot_name or "adroit_hand" in robot_name:
