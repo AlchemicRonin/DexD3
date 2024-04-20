@@ -187,8 +187,10 @@ if __name__ == "__main__":
     atlas = load_atlas(env.scene)
 
     
-    print("active joints", len(atlas.get_active_joints()))
-
+    # print("active joints", len(atlas.get_active_joints()))
+    for joint in atlas.get_active_joints():
+        print(joint.get_name())
+    print(atlas.get_qpos())
     i = 0
     while not env.viewer.closed:
         if i % 1000 == 0:

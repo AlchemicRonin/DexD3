@@ -15,6 +15,8 @@ class PartialKinematicModel:
                 0]
         self.start_link = self.start_joint_tuple[0].get_parent_link()
         self.end_link = self.end_joint_tuple[0].get_child_link()
+        print(f"Start link: {self.start_link.get_name()}")
+        print(f"End link: {self.end_link.get_name()}")
 
         # Build new articulation for partial kinematics chain
         scene = robot.get_builder().get_scene()
@@ -42,6 +44,9 @@ class PartialKinematicModel:
 
         partial_robot = builder.build(fix_root_link=True)
         partial_robot.set_pose(sapien.Pose([0, 0, -10]))
+        
+
+
         self.model = partial_robot.create_pinocchio_model()
 
         # Parse new model
@@ -49,12 +54,17 @@ class PartialKinematicModel:
         self.end_link_name = self.end_link.get_name()
         self.end_link_index = [i for i, link in enumerate(partial_robot.get_links()) if
                                link.get_name() == self.end_link_name][0]
+        print(f"End link index: {self.end_link_index}")
+        self.link_names = [link.get_name() for link in partial_robot.get_links()]
+        print(f"Link names: {self.link_names}")
         self.partial_robot = partial_robot
 
     def compute_end_link_spatial_jacobian(self, partial_qpos):
         self.partial_robot.set_qpos(partial_qpos)
         jacobian = self.partial_robot.compute_world_cartesian_jacobian()[
                    self.end_link_index * 6 - 6: self.end_link_index * 6, :]
+        # jacobian = self.partial_robot.compute_world_cartesian_jacobian()
+        print(jacobian.shape)
         return jacobian
 
 

@@ -11,7 +11,7 @@ from dexart.env.sim_env.base import BaseSimulationEnv
 from dexart.env.sim_env.constructor import add_default_scene_light
 from dexart.utils.kinematics_helper import PartialKinematicModel
 from dexart.utils.common_robot_utils import load_robot, generate_arm_robot_hand_info, \
-    generate_free_robot_hand_info, FreeRobotInfo, ArmRobotInfo
+    generate_free_robot_hand_info, FreeRobotInfo, ArmRobotInfo, load_atlas, generate_atlas_info
 from dexart.utils.random_utils import np_random
 from dexart.utils.render_scene_utils import actor_to_open3d_mesh
 
@@ -98,16 +98,41 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
     def setup(self, robot_name):
         self.robot_name = robot_name
-        self.robot = load_robot(self.scene, robot_name, disable_self_collision=False)
-        self.robot.set_pose(sapien.Pose(np.array([0, 0, -5])))
+        # self.robot = load_robot(self.scene, robot_name, disable_self_collision=False)
+        self.robot = load_atlas(self.scene, disable_self_collision=False)
+        
+        self.robot.set_pose(sapien.Pose(np.array([0, 0, 0])))
         self.is_robot_free = "free" in robot_name
-        if self.is_robot_free:
-            info = generate_free_robot_hand_info()[robot_name]
-            velocity_limit = np.array([1.0] * 3 + [1.57] * 3 + [3.14] * (self.robot.dof - 6))
+        self.is_atlas = "atlas" in robot_name
+
+        if self.is_atlas:
+            self.arm_dof = 7
+            self.hand_dof = 16
+            velocity_limit = np.array([1] * self.arm_dof + [np.pi] * self.hand_dof)
             self.velocity_limit = np.stack([-velocity_limit, velocity_limit], axis=1)
-            init_pose = sapien.Pose(np.array([-0.4, 0, 0.2]), transforms3d.euler.euler2quat(0, np.pi / 2, 0))
-            self.robot.set_pose(init_pose)
-            self.arm_dof = 0
+            l_start_joint_name = self.robot.get_active_joints()[0].get_name()
+            l_end_joint_name = self.robot.get_active_joints()[self.arm_dof - 1].get_name()
+            r_start_joint_name = self.robot.get_active_joints()[self.arm_dof].get_name()
+            r_end_joint_name = self.robot.get_active_joints()[self.arm_dof + self.arm_dof - 1].get_name()
+            # print("l_start_joint_name", l_start_joint_name, 
+            #       "l_end_joint_name", l_end_joint_name,
+            #         "r_start_joint_name", r_start_joint_name,
+            #         "r_end_joint_name", r_end_joint_name)
+
+            self.l_kinematic_model = PartialKinematicModel(self.robot, l_start_joint_name, l_end_joint_name)
+            self.r_kinematic_model = PartialKinematicModel(self.robot, r_start_joint_name, r_end_joint_name)
+
+            self.l_ee_link_name = self.l_kinematic_model.end_link_name
+            self.r_ee_link_name = self.r_kinematic_model.end_link_name
+            # for link in self.robot.get_links():
+            #     print(link.get_name())
+            # print("l_ee_link_name", self.l_ee_link_name, "r_ee_link_name", self.r_ee_link_name)
+            
+            self.l_ee_link = [link for link in self.robot.get_links() if link.get_name() == self.l_ee_link_name][0]
+            # print("l_ee_link", self.l_ee_link)
+            self.r_ee_link = [link for link in self.robot.get_links() if link.get_name() == self.r_ee_link_name][0]
+            info = generate_atlas_info()
+            
         else:
             info = generate_arm_robot_hand_info()[robot_name]
             self.arm_dof = info.arm_dof
@@ -127,6 +152,8 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         # Choose different step function
         if self.is_robot_free:
             self.rl_step = self.free_sim_step
+        if self.is_atlas:
+            self.rl_step = self.atlas_sim_step
         else:
             self.rl_step = self.arm_sim_step
 
@@ -178,6 +205,51 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         ee_link_new_pose = self.ee_link.get_pose()
         relative_pos = ee_link_new_pose.p - ee_link_last_pose.p
         self.cartesian_error = np.linalg.norm(relative_pos - target_root_velocity[:3] * self.control_time_step)
+
+    def atlas_sim_step(self, action: np.ndarray):
+        current_qpos = self.robot.get_qpos()
+        l_ee_link_last_pose = self.l_ee_link.get_pose()
+        r_ee_link_last_pose = self.r_ee_link.get_pose()
+        action = np.clip(action, -1, 1)
+        l_target_root_velocity = recover_action(action[:6], self.velocity_limit[:6])
+        r_target_root_velocity = recover_action(action[6:12], self.velocity_limit[:6])
+        l_palm_jacobian = self.l_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[:self.arm_dof])
+        r_palm_jacobian = self.r_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[self.arm_dof:self.arm_dof * 2])
+        l_arm_qvel = compute_inverse_kinematics(l_target_root_velocity, l_palm_jacobian)[:self.arm_dof]
+        r_arm_qvel = compute_inverse_kinematics(r_target_root_velocity, r_palm_jacobian)[:self.arm_dof]
+        l_arm_qvel = np.clip(l_arm_qvel, -np.pi / 1, np.pi / 1)
+        r_arm_qvel = np.clip(r_arm_qvel, -np.pi / 1, np.pi / 1)
+        l_arm_qpos = l_arm_qvel * self.control_time_step + self.robot.get_qpos()[:self.arm_dof]
+        r_arm_qpos = r_arm_qvel * self.control_time_step + self.robot.get_qpos()[self.arm_dof:self.arm_dof * 2]
+
+        print("q_limits", self.robot.get_qlimits())
+
+        hand_qpos = recover_action(action[14:], self.robot.get_qlimits()[14:])
+
+        target_q_pos = np.concatenate([l_arm_qpos, r_arm_qpos, hand_qpos])
+        target_q_vel = np.zeros_like(target_q_pos)
+        target_q_vel[:self.arm_dof] = l_arm_qvel
+        target_q_vel[self.arm_dof:self.arm_dof * 2] = r_arm_qvel
+
+        self.robot.set_drive_target(target_q_pos)
+        self.robot.set_drive_velocity_target(target_q_vel)
+
+        for i in range(self.frame_skip):
+            self.robot.set_qf(self.robot.compute_passive_force(external=False, coriolis_and_centrifugal=False))
+            self.scene.step()
+        self.current_step += 1
+
+        l_ee_link_new_pose = self.l_ee_link.get_pose()
+        r_ee_link_new_pose = self.r_ee_link.get_pose()
+        l_relative_pos = l_ee_link_new_pose.p - l_ee_link_last_pose.p
+        r_relative_pos = r_ee_link_new_pose.p - r_ee_link_last_pose.p
+        self.l_cartesian_error = np.linalg.norm(l_relative_pos - l_target_root_velocity[:3] * self.control_time_step)
+        self.r_cartesian_error = np.linalg.norm(r_relative_pos - r_target_root_velocity[:3] * self.control_time_step)
+
+
+
+
+        
 
     def arm_kinematic_step(self, action: np.ndarray):
         """
@@ -231,6 +303,8 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
     def configure_robot_contact_reward(self):
         if self.is_robot_free:
             info = generate_free_robot_hand_info()[self.robot_name]
+        elif self.is_atlas:
+            info = generate_atlas_info()[self.robot_name]
         else:
             info = generate_arm_robot_hand_info()[self.robot_name]
         robot_link_names = [link.get_name() for link in self.robot.get_links()]
