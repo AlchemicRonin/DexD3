@@ -38,10 +38,10 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         # self.robot_init_pose_l = sapien.Pose(np.array([-0.5, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
         # self.robot_l.set_pose(self.robot_init_pose_l)
 
-        self.robot_init_pose = sapien.Pose(np.array([-1, 0, -1]), transforms3d.euler.euler2quat(0, 0, 0))
+        self.robot_init_pose = sapien.Pose(np.array([-0.8, 0, -1]), transforms3d.euler.euler2quat(0, 0, 0))
         self.robot.set_pose(self.robot_init_pose)
 
-        # self.configure_robot_contact_reward()
+        self.configure_robot_contact_reward()
         # self.robot_annotation = self.setup_robot_annotation(robot_name)
         # ============== will change if randomize instance ==============
         self.simple_reset()

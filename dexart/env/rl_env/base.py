@@ -118,6 +118,8 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             #       "l_end_joint_name", l_end_joint_name,
             #         "r_start_joint_name", r_start_joint_name,
             #         "r_end_joint_name", r_end_joint_name)
+            # for link in self.robot.get_links():
+            #     print(link.get_name(), " ", link.get_id())
 
             self.l_kinematic_model = PartialKinematicModel(self.robot, l_start_joint_name, l_end_joint_name)
             self.r_kinematic_model = PartialKinematicModel(self.robot, r_start_joint_name, r_end_joint_name)
@@ -222,7 +224,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         l_arm_qpos = l_arm_qvel * self.control_time_step + self.robot.get_qpos()[:self.arm_dof]
         r_arm_qpos = r_arm_qvel * self.control_time_step + self.robot.get_qpos()[self.arm_dof:self.arm_dof * 2]
 
-        print("q_limits", self.robot.get_qlimits())
+        # print("q_limits", self.robot.get_qlimits())
 
         hand_qpos = recover_action(action[14:], self.robot.get_qlimits()[14:])
 
@@ -310,8 +312,11 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         robot_link_names = [link.get_name() for link in self.robot.get_links()]
         robot_links = self.robot.get_links()
         # configure palm
-        self.palm_link_name = info.palm_name
-        self.palm_link = [link for link in self.robot.get_links() if link.get_name() == 'base_link'][0]
+        self.r_palm_link_name = info.palm_name
+        self.l_palm_link_name = 'l_hand'
+        self.r_palm_link = [link for link in self.robot.get_links() if link.get_name() == 'base_link'][0]
+        self.l_palm_link = [link for link in self.robot.get_links() if link.get_name() == 'l_hand'][0]
+
         # configure fingers
         finger_tip_names = ["link_15.0_tip", "link_3.0_tip", "link_7.0_tip", "link_11.0_tip"]
         thumb_link_name = ["link_15.0_tip", "link_15.0", "link_14.0"]
@@ -328,30 +333,42 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.finger_tip_pos = np.zeros([len(finger_tip_names), 3])
         self.finger_reward_scale = np.ones(len(self.finger_tip_links)) * 0.01
         self.finger_reward_scale[0] = 0.04
+
         # configure arm
-        arm_contact_link_name = ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]
+        l_arm_contact_link_name = ["l_clav", "l_scap", "l_uarm", "l_larm", "l_ufarm", "l_lfarm"]
+        r_arm_contact_link_name = ["r_clav", "r_scap", "r_uarm", "r_larm", "r_ufarm", "r_lfarm"]
+        
+
         self.arm_contact_links = [self.robot.get_links()[robot_link_names.index(name)] for name in
-                                  arm_contact_link_name]
+                                  l_arm_contact_link_name + r_arm_contact_link_name]
+        
         self.robot_object_contact = np.zeros(len(finger_tip_names) + 1)  # contact buffer of four tip and palm
         self.robot_object_contact_handle = np.zeros(len(finger_tip_names) + 1)
         self.robot_object_contact_no_handle = np.zeros(len(finger_tip_names) + 1)
         self.hand_base_contact = np.zeros(len(finger_tip_names) + 1)
         self.robot_instance_base_contact = np.zeros(len(finger_tip_names) + 1)
+
         # configure hand / palm /robot id (for segmentation)
         self.thumb_ids = [link.get_id() for link in self.thumb_links] + [
             robot_links[robot_link_names.index("link_13.0")].get_id()]
+        
         self.index_ids = [link.get_id() for link in self.index_links] + [
             robot_links[robot_link_names.index("link_0.0")].get_id()]
+        
         self.middle_ids = [link.get_id() for link in self.middle_links] + [
             robot_links[robot_link_names.index("link_4.0")].get_id()]
+        
         self.ring_ids = [link.get_id() for link in self.ring_links] + [
             robot_links[robot_link_names.index("link_8.0")].get_id()]
-        self.palm_id = [self.palm_link.get_id()] + [robot_links[robot_link_names.index("link_12.0")].get_id()]
-
+        
+        self.r_palm_id = [self.r_palm_link.get_id()] + [robot_links[robot_link_names.index("link_12.0")].get_id()]
+        self.l_palm_id = [self.l_palm_link.get_id()]
+        
     @property
     def grouping_info(self):
         return {
-            'handle': self.handle_id,
+            'l_handle': self.l_handle_id,
+            'r_handle': self.r_handle_id,
             'instance_body': self.instance_ids_without_handle,  # include handle
             'thumb': self.thumb_ids,
             'index': self.index_ids,
