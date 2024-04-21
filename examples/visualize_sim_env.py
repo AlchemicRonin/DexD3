@@ -4,6 +4,7 @@ import numpy as np
 
 from dexart.env.sim_env.laptop_env import LaptopEnv
 from dexart.env.sim_env.pen_env import PenEnv
+from dexart.env.sim_env.pot_env import PotEnv
 
 
 def main(task_name: str) -> None:
@@ -11,6 +12,8 @@ def main(task_name: str) -> None:
         env = LaptopEnv(index=-1)
     elif task_name == "pen":
         env = PenEnv(index=-1, friction=100000)
+    elif task_name == "pot":
+        env = PotEnv(index=-1)
     else:
         raise ValueError(f"Unknown task name: {task_name}")
     env.seed(0)

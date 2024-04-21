@@ -5,10 +5,17 @@ assets/vision_pretrain
 
 assets/annotation/*
 !assets/annotation/pen_scale.json
+!assets/annotation/pot_scale.json
 
 assets/sapien/*
+# pen
 !assets/sapien/101685
 !assets/sapien/101732
+!assets/sapien/102909
+# pot
+!assets/sapien/100021
+!assets/sapien/100015
+!assets/sapien/100017
 
 __pycache__/
 *.egg-info/
