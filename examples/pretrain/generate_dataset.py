@@ -5,6 +5,7 @@ from dexart.env.task_setting import TRAIN_CONFIG, RANDOM_CONFIG
 from dexart.env.create_env import create_env
 from tqdm import tqdm
 import argparse
+from sapien.utils import Viewer
 
 
 def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_path='data/'):
@@ -22,14 +23,24 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
                      rand_degree=RANDOM_CONFIG[task_name]['rand_degree'],
                      )
     obs = env.reset()
+
+    viewer = Viewer(env.renderer)
+    viewer.set_scene(env.scene)
+    viewer.focus_camera(env.cameras['instance_1'])
+    env.viewer = viewer
+    env.render()
+
     pc_data = []
     for i in tqdm(range(env.horizon * n_fold)):
         # TODO: use action space to bound the random action
-        action = np.random.uniform(-2, 2, size=env.action_space.shape)
+        action = np.random.uniform(-1, 1, size=env.action_space.shape)
         # step: RLbaseEnv -> step -> get_visual_observation -> get_camera_obs
         # config: createEnv.setup_visual_obs_config -> task_setting.py:OBS_CONFIG -> camera_cfg
         # TODO: may change num_points
         obs, reward, done, _ = env.step(action)
+        env.render()
+
+        
 
         qlimits = env.instance.get_qlimits()
         # random qpos

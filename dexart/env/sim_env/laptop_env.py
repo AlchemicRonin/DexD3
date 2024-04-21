@@ -15,7 +15,8 @@ class LaptopEnv(BaseSimulationEnv):
         self.last_openness = None
         self.instance_collision_links = None
         self.instance_links = None
-        self.handle_link = None
+        self.r_handle = None
+        self.l_handle = None
         self.handle2link_relative_pose = None
         self.scale_path = None
         self.iter = iter
@@ -54,16 +55,22 @@ class LaptopEnv(BaseSimulationEnv):
         if not self.change_instance_when_reset:
             self.index = self.instance_list[index]
             self.instance, self.revolute_joint, self.revolute_joint_index = self.load_instance(index=self.index)
-            self.handle_link = self.revolute_joint.get_child_link()
+            self.r_handle = self.revolute_joint.get_child_link()
+            self.l_handle = self.revolute_joint.get_parent_link()
             self.instance_links = self.instance.get_links()
             self.instance_collision_links = [link for link in self.instance.get_links() if
                                              len(link.get_collision_shapes()) > 0]
-            self.handle_id = self.handle_link.get_id()
+            self.l_handle_id = self.r_handle.get_id()
+            self.r_handle_id = self.l_handle.get_id()
             self.instance_ids_without_handle = [link.get_id() for link in self.instance_links]
-            self.instance_ids_without_handle.remove(self.handle_id)
+            self.instance_ids_without_handle.remove(self.l_handle_id)
+            self.instance_ids_without_handle.remove(self.r_handle_id)
             self.last_openness = self.instance.get_qpos()[self.revolute_joint_index]
             if not self.handle2link_relative_pose_dict.__contains__(self.index):
-                self.handle2link_relative_pose_dict[self.index] = self.update_handle_relative_pose()
+                self.handle2link_relative_pose_dict[self.index] = {}
+                self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("r_handle"))
+                self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("l_handle"))
+
         self.reset_env()
 
     def setup_instance_annotation(self):
@@ -97,6 +104,7 @@ class LaptopEnv(BaseSimulationEnv):
 
         instance: sapien.Articulation = loader.load(urdf_path, config={'density': 500})
         for joint in instance.get_joints():
+            #TODO: change friction to emphasize dual-arm manipulation
             joint.set_friction(self.friction)
             # joint.set_drive_property(0, 5)
 
@@ -125,32 +133,40 @@ class LaptopEnv(BaseSimulationEnv):
             self.index = self.instance_list[random.randint(0, len(self.instance_list) - 1)]
             self.instance, self.revolute_joint, self.revolute_joint_index = self.load_instance(index=self.index)
             self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle'])
-            self.handle_link = self.revolute_joint.get_child_link()
+            self.r_handle = self.revolute_joint.get_child_link()
+            self.l_handle = self.revolute_joint.get_parent_link()
             self.instance_links = self.instance.get_links()
             self.instance_collision_links = [link for link in self.instance.get_links() if
                                              len(link.get_collision_shapes()) > 0]
-            self.handle_id = self.handle_link.get_id()
+            self.l_handle_id = self.r_handle.get_id() # upper surface of laptop
+            self.r_handle_id = self.l_handle.get_id() # base of laptop
             self.instance_ids_without_handle = [link.get_id() for link in self.instance_links]
-            self.instance_ids_without_handle.remove(self.handle_id)
+            self.instance_ids_without_handle.remove(self.l_handle_id)
+            self.instance_ids_without_handle.remove(self.r_handle_id)
             self.last_openness = self.instance.get_qpos()[self.revolute_joint_index]
             if not self.handle2link_relative_pose_dict.__contains__(self.index):
-                self.handle2link_relative_pose_dict[self.index] = self.update_handle_relative_pose()
+                self.handle2link_relative_pose_dict[self.index] = {}
+                self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("r_handle"))
+                self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("l_handle"))
         pos = self.pos  # can add noise here to randomize loaded position
         orn = transforms3d.euler.euler2quat(0, 0, 0)
         self.instance.set_root_pose(sapien.Pose(pos, orn))
         self.instance.set_qpos([self.joint_limits_dict[str(self.index)]['left'] + self.init_open_rad])
 
-    def update_handle_relative_pose(self):
+    def update_handle_relative_pose(self, handle_name = "r_handle"):
         vertices_relative_pose_list = list()
         vertices_global_pose_list = list()
-        # get all the collision mesh of laptop upper face
-        for collision_mesh in self.handle_link.get_collision_shapes():
+        
+        assert handle_name in ["r_handle", "l_handle"], "handle_name should be either 'r_handle' or 'l_handle'"
+        handle = getattr(self, handle_name)
+        
+        for collision_mesh in handle.get_collision_shapes():
             vertices = collision_mesh.geometry.vertices
             for vertex in vertices:
                 vertex_relative_pose = sapien.Pose(vertex * collision_mesh.geometry.scale).transform(
                     collision_mesh.get_local_pose())
                 vertices_relative_pose_list.append(vertex_relative_pose)
-                vertices_global_pose_list.append(self.handle_link.get_pose().transform(vertex_relative_pose))
+                vertices_global_pose_list.append(handle.get_pose().transform(vertex_relative_pose))
 
         z_max = -1e9
         max_z_index = 0
@@ -170,11 +186,13 @@ class LaptopEnv(BaseSimulationEnv):
         y = mean_pos[1]
 
         handle_global_pose = sapien.Pose(np.array([x, y, z]))
-        link_global_pose = self.handle_link.get_pose()
+        link_global_pose = handle.get_pose()
 
         relative_pose = link_global_pose.inv().transform(handle_global_pose)
-        return relative_pose
+
+        return {handle_name: relative_pose}
 
     def get_handle_global_pose(self):
-        better_global_pose = self.handle_link.get_pose().transform(self.handle2link_relative_pose_dict[self.index])
-        return better_global_pose
+        r_better_global_pose = self.r_handle.get_pose().transform(self.handle2link_relative_pose_dict[self.index]["r_handle"])
+        l_better_global_pose = self.l_handle.get_pose().transform(self.handle2link_relative_pose_dict[self.index]["l_handle"])
+        return r_better_global_pose, l_better_global_pose

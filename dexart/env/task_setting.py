@@ -5,6 +5,7 @@ import numpy as np
 ROBOT_TABLE_MARGIN_X = 0.06
 ROBOT_TABLE_MARGIN_Y = 0.04
 
+# TODO: change the valid bound
 BOUND_CONFIG = {
     "faucet": [0.1, 2.0, -1.0, 1, -0.1352233 + 0.14, 0.4],
     "bucket": [0.1, 2.0, -2.0, 2.0, -0.29, 0.4],
@@ -165,10 +166,12 @@ CAMERA_CONFIG = {
     "laptop": {
         "instance_1": dict(
             pose=sapien.Pose(
-                p=np.array([0, 1, 0.5]),
-                q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
+                # p=np.array([0.5, 1, 0.5]),
+                # q=transforms3d.euler.euler2quat(np.pi/2 , np.pi, -np.pi/4),
+                p=np.array([-0.55, 0, 1.2]),
+                q=transforms3d.euler.euler2quat(-np.pi*5/6 , 0, -np.pi/2),
             ),
-            fov=np.deg2rad(69.4),
+            fov=np.deg2rad(90),
             resolution=(64, 64),
         ),
     },

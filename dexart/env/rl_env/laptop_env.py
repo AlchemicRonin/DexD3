@@ -28,7 +28,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         # ============== status definition ==============
         self.instance_init_pos = None
         self.robot_init_pose = None
-        self.robot_object_contact = None
+        self.finger_object_contact = None
         self.finger_tip_pos = None
         self.rand_pos = rand_pos
         self.rand_orn = rand_orn
@@ -42,37 +42,70 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.robot.set_pose(self.robot_init_pose)
 
         self.configure_robot_contact_reward()
-        # self.robot_annotation = self.setup_robot_annotation(robot_name)
+        self.robot_annotation = self.setup_robot_annotation(robot_name)
         # ============== will change if randomize instance ==============
-        self.simple_reset()
+        self.reset()
 
     def update_cached_state(self):
+        # right side (with allegro hand)
+        ## finger
         for i, link in enumerate(self.finger_tip_links):
             self.finger_tip_pos[i] = self.finger_tip_links[i].get_pose().p
-        check_contact_links = self.finger_contact_links + [self.palm_link]
-        finger_contact_boolean = self.check_actor_pair_contacts(check_contact_links, self.handle_link)
-        self.robot_object_contact[:] = np.clip(np.bincount(self.finger_contact_ids, weights=finger_contact_boolean), 0,
-                                               1)
+        r_check_contact_links = self.finger_contact_links + [self.r_palm_link]
+        finger_contact_boolean = self.check_actor_pair_contacts(r_check_contact_links, self.r_handle)
+        # NOTE: change the name (in BaseRLEnv): self.robot_object_contact -> self.finger_object_contact
+        self.finger_object_contact[:] = np.clip(np.bincount(self.finger_contact_ids, weights=finger_contact_boolean), 0, 1)
+        # any one finger or palm is contacting
+        self.loosen_contact_finger = np.sum(self.finger_object_contact[:-1]) >= 1 or self.finger_object_contact[-1]
+        # two fingers and palm is contacting
+        self.is_contact_finger = np.sum(self.finger_object_contact[:-1]) >= 2 and self.finger_object_contact[-1]
+        
+        ## palm
+        self.r_palm_pose = self.r_palm_link.get_pose()
+        self.r_palm_v = self.r_palm_link.get_velocity()
+        self.r_palm_w = self.r_palm_link.get_angular_velocity()
+        trans_matrix = self.r_palm_pose.to_transformation_matrix()
+        self.palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
+
+        # left side (with ball)
+        l_check_contact_links = [self.l_palm_link]
+        ball_contact_boolean = self.check_actor_pair_contacts(l_check_contact_links, self.l_handle)
+        self.ball_object_contact = np.clip(ball_contact_boolean, 0,1) # the clip is not necessary
+        
+        # palm 
+        self.l_palm_pose = self.l_palm_link.get_pose()
+        self.l_palm_v = self.l_palm_link.get_velocity()
+        self.l_palm_w = self.l_palm_link.get_angular_velocity()
+        trans_matrix = self.l_palm_pose.to_transformation_matrix()
+        self.palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
+
+
+        # arm contact
         arm_contact_boolean = self.check_actors_pair_contacts(self.arm_contact_links, self.instance_links)
+        # TODO: may used arm seperate contact in reward
+        l_arm_contact_boolean = self.check_actors_pair_contacts(self.l_arm_contact_links, self.instance_links)
+        r_arm_contact_boolean = self.check_actors_pair_contacts(self.r_arm_contact_links, self.instance_links)
+        
         self.is_arm_contact = np.sum(arm_contact_boolean)
-        self.loosen_contact = np.sum(self.robot_object_contact[:-1]) >= 1 or self.robot_object_contact[-1]
-        self.is_contact = np.sum(self.robot_object_contact[:-1]) >= 2 and self.robot_object_contact[-1]
+        self.l_is_arm_contact = np.sum(l_arm_contact_boolean)
+        self.r_is_arm_contact = np.sum(r_arm_contact_boolean)
+        
         self.robot_qpos_vec = self.robot.get_qpos()
 
+        # object state
+        self.height = self.instance.get_pose().p[2]
         openness = abs(self.instance.get_qpos()[0] - self.joint_limits_dict[str(self.index)]['middle'])
         total = abs(self.joint_limits_dict[str(self.index)]['left'] - self.joint_limits_dict[str(self.index)]['middle']) - self.init_open_rad
         self.progress = 1 - openness / total
-        self.handle_pose = self.get_handle_global_pose()
-        self.palm_pose = self.palm_link.get_pose()
-        trans_matrix = self.palm_pose.to_transformation_matrix()
-        self.palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
-        self.handle_in_palm = self.handle_pose.p - self.palm_pose.p
-        self.palm_v = self.palm_link.get_velocity()
-        self.palm_w = self.palm_link.get_angular_velocity()
-        self.height = self.instance.get_pose().p[2]
-        if np.linalg.norm(self.palm_pose.p - self.handle_pose.p) > 0.2:  # Reaching
+        self.r_handle_pose, self.l_handle_pose = self.get_handle_global_pose()
+
+        self.r_handle_in_palm = self.r_handle_pose.p - self.r_palm_pose.p
+        self.l_handle_in_palm = self.l_handle_pose.p - self.l_palm_pose.p
+
+        # TODO: may use palm-palm / palm-handle to decide state
+        if np.linalg.norm(self.r_handle_in_palm) > 0.2:  # Reaching
             self.state = GraspState.REACHING
-        elif not self.is_contact:
+        elif not self.is_contact_finger:
             self.state = GraspState.GRASPING
         else:
             self.state = GraspState.GRASPED
@@ -80,35 +113,41 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.is_eval_done = (self.progress > 0.95) and (self.state == 3)
 
     def get_oracle_state(self):
+        return self.get_robot_state()
+
+    def get_robot_state(self):
+        # 30+(3+3+3)+(3+3+3)+1 = 49
         return np.concatenate([
-            self.robot_qpos_vec, self.palm_v, self.palm_w, self.palm_pose.p,
+            self.robot_qpos_vec, 
+            self.r_palm_v, 
+            self.r_palm_w, 
+            self.r_palm_pose.p, 
+            self.l_palm_v, 
+            self.l_palm_w, 
+            self.l_palm_pose.p, 
             [float(self.current_step) / float(self.horizon)]
         ])
 
-    def get_robot_state(self):
-        return np.concatenate([
-            self.robot_qpos_vec, self.palm_v, self.palm_w, self.palm_pose.p, [float(self.current_step) / float(self.horizon)]
-        ])
-
     def get_reward(self, action):
+        # TODO: need dual arm version!
         reward = 0
         if self.state == GraspState.REACHING:
-            reward = -0.1 * min(np.linalg.norm(self.palm_pose.p - self.handle_pose.p), 0.5)  # encourage palm be close to handle
+            reward = -0.1 * min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5)  # encourage palm be close to handle
             if self.progress < 0:
                 reward += 0.5 * self.progress
         elif self.state == GraspState.GRASPING:
-            reward += 0.2 * (int(self.is_contact))
+            reward += 0.2 * (int(self.is_contact_finger))
             reward -= 0.1 * (int(self.is_arm_contact))
             if self.progress < 0:
                 reward += 0.5 * self.progress
         elif self.state == GraspState.GRASPED:
-            reward += 0.2 * (int(self.is_contact))
+            reward += 0.2 * (int(self.is_contact_finger))
             reward -= 0.1 * (int(self.is_arm_contact))
             reward += 1.0 * self.progress
         if self.early_done:
             reward += (self.horizon - self.current_step) * 1.2 * self.progress
         action_penalty = np.sum(np.clip(self.robot.get_qvel(), -1, 1) ** 2) * 0.01
-        controller_penalty = (self.cartesian_error ** 2) * 1e3
+        controller_penalty = (self.r_cartesian_error ** 2) * 1e3
         reward -= 0.01 * (action_penalty + controller_penalty)
         return reward
     
@@ -129,7 +168,9 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
             self.flush_imagination_config()
 
         if self.robot_annotation.__contains__(str(self.index)):
-            self.instance_init_pos = self.robot.get_pose().p + np.array(self.robot_annotation[str(self.index)])
+            # self.instance_init_pos = np.array([0,0,0.05])
+            self.instance_init_pos = np.array(self.robot_annotation[str(self.index)]) + self.robot.get_pose().p + np.array([0,0,1])
+            # self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle']/2)
         else:
             self.instance_init_pos = self.pos
         self.pos = self.instance_init_pos
@@ -143,6 +184,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
 
     def setup_robot_annotation(self, robot_name: str):
         # here we load robot2laptop
+        # NOTE: NOT USED, all laptop is set to the same position, center of the table
         current_dir = Path(__file__).parent
         self.pos_path = current_dir.parent.parent.parent / "assets" / "annotation" / f"laptop_{robot_name}_relative_position.json"
         if not os.path.exists(self.pos_path):

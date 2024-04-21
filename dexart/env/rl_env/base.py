@@ -108,7 +108,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         if self.is_atlas:
             self.arm_dof = 7
             self.hand_dof = 16
-            velocity_limit = np.array([1] * self.arm_dof + [np.pi] * self.hand_dof)
+            velocity_limit = np.array([1] * 12 + [np.pi] * self.hand_dof)
             self.velocity_limit = np.stack([-velocity_limit, velocity_limit], axis=1)
             l_start_joint_name = self.robot.get_active_joints()[0].get_name()
             l_end_joint_name = self.robot.get_active_joints()[self.arm_dof - 1].get_name()
@@ -226,7 +226,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
         # print("q_limits", self.robot.get_qlimits())
 
-        hand_qpos = recover_action(action[14:], self.robot.get_qlimits()[14:])
+        hand_qpos = recover_action(action[12:], self.robot.get_qlimits()[14:])
 
         target_q_pos = np.concatenate([l_arm_qpos, r_arm_qpos, hand_qpos])
         target_q_vel = np.zeros_like(target_q_pos)
@@ -334,6 +334,9 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.finger_reward_scale = np.ones(len(self.finger_tip_links)) * 0.01
         self.finger_reward_scale[0] = 0.04
 
+        # configure ball of left hand
+
+
         # configure arm
         l_arm_contact_link_name = ["l_clav", "l_scap", "l_uarm", "l_larm", "l_ufarm", "l_lfarm"]
         r_arm_contact_link_name = ["r_clav", "r_scap", "r_uarm", "r_larm", "r_ufarm", "r_lfarm"]
@@ -341,10 +344,19 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
         self.arm_contact_links = [self.robot.get_links()[robot_link_names.index(name)] for name in
                                   l_arm_contact_link_name + r_arm_contact_link_name]
+        self.l_arm_contact_links = [self.robot.get_links()[robot_link_names.index(name)] for name in
+                                  l_arm_contact_link_name]
+        self.r_arm_contact_links = [self.robot.get_links()[robot_link_names.index(name)] for name in
+                                  r_arm_contact_link_name]
+        self.l_arm_id = [link.get_id() for link in self.l_arm_contact_links]
+        self.r_arm_id = [link.get_id() for link in self.r_arm_contact_links]
         
-        self.robot_object_contact = np.zeros(len(finger_tip_names) + 1)  # contact buffer of four tip and palm
-        self.robot_object_contact_handle = np.zeros(len(finger_tip_names) + 1)
-        self.robot_object_contact_no_handle = np.zeros(len(finger_tip_names) + 1)
+        self.finger_object_contact = np.zeros(len(finger_tip_names) + 1)  # contact buffer of four tip and palm
+        self.ball_object_contact = np.zeros(1)  # contact buffer of a ball
+        # not used
+        #self.finger_object_contact_handle = np.zeros(len(finger_tip_names) + 1)
+        #self.finger_object_contact_no_handle = np.zeros(len(finger_tip_names) + 1)
+        
         self.hand_base_contact = np.zeros(len(finger_tip_names) + 1)
         self.robot_instance_base_contact = np.zeros(len(finger_tip_names) + 1)
 
@@ -367,14 +379,17 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
     @property
     def grouping_info(self):
         return {
-            'l_handle': self.l_handle_id,
             'r_handle': self.r_handle_id,
+            'l_handle': self.l_handle_id,
             'instance_body': self.instance_ids_without_handle,  # include handle
             'thumb': self.thumb_ids,
             'index': self.index_ids,
             'middle': self.middle_ids,
             'ring': self.ring_ids,
-            'palm': self.palm_id,
+            'r_palm': self.r_palm_id,
+            'l_palm': self.l_palm_id,
+            'r_arm': self.r_arm_id,
+            'l_arm': self.l_arm_id,
         }
 
     def setup_visual_obs_config(self, config: Dict[str, Dict]):
@@ -578,6 +593,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         return camera_obs
 
     def get_camera_obs(self):
+        #TODO: change palm link to left or right
         if self.cameras.__contains__("hand"):
             sapien2opencv = np.array([[0, -1, 0], [0, 0, -1], [1, 0, 0]])
             sapien2opencv_quat = transforms3d.quaternions.mat2quat(sapien2opencv)
@@ -639,7 +655,8 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                     obs_dict[f"{name}-seg_gt"] = obs[:, 3:]  # NOTE: add gt segmentation
                     if obs_dict[f"{name}-seg_gt"].shape != (camera_cfg["point_cloud"]["num_points"], 4):
                         # align the gt segmentation mask
-                        raise ValueError(f"FIGURE OUT WHY TI HAPPEN! \n Segmentation mask shape is not correct: {obs_dict[f'{name}-seg_gt'].shape}")
+                        # ??? if there is no enough points, it return a all zero mask, it is correct?
+                        print(f"No enough points, find failure rate!")
                         obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 4))
                     obs = obs[:, :3]
                 else:

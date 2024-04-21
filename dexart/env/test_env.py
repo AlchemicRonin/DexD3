@@ -1,4 +1,3 @@
-from dexart.env.sim_env.usb_env import USBEnv
 import sapien.core as sapien
 import numpy as np
 from dexart.env.rl_env.base import BaseRLEnv
