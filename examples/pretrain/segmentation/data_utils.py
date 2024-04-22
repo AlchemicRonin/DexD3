@@ -38,7 +38,6 @@ class SemSegDataset(Dataset):
             labels = np.argmax(sample[:, 3:], axis=1)
         else:
             # NOTE: only use the first 7 channels including xyz + labels!! (imagination)
-            # TODO: 512 may change because of additional arm
             points = sample[0:512, 0:self.point_channel]  
             labels = np.argmax(sample[0:512, 3:], axis=1)
         return torch.tensor(points), torch.tensor(labels)
@@ -56,7 +55,8 @@ if __name__ == '__main__':
     for i in tqdm(range(len(dataset))):
         idx = np.random.randint(0, len(dataset))
         pc, label = dataset[idx]
-        colors = plt.get_cmap("tab20")(label / 4).reshape(-1, 4)
+        # TODO: channel (num_mush) is changed
+        colors = plt.get_cmap("tab20")(label / 8).reshape(-1, 8)
 
         obs_cloud = o3d.geometry.PointCloud(points=o3d.utility.Vector3dVector(pc[..., 0:3]))
         obs_cloud.colors = o3d.utility.Vector3dVector(colors[:, 0:3])

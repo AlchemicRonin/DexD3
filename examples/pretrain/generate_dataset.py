@@ -10,7 +10,7 @@ from sapien.utils import Viewer
 
 def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_path='data/'):
     env = create_env(task_name=task_name,
-                     use_gui=True,
+                     use_gui=False,
                      is_eval=False,
 
                      use_visual_obs=True,
@@ -32,11 +32,10 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
 
     pc_data = []
     for i in tqdm(range(env.horizon * n_fold)):
-        # TODO: use action space to bound the random action
+        # TODO: change initialization to have more pixel of robot and hand
         action = np.random.uniform(-1, 1, size=env.action_space.shape)
         # step: RLbaseEnv -> step -> get_visual_observation -> get_camera_obs
         # config: createEnv.setup_visual_obs_config -> task_setting.py:OBS_CONFIG -> camera_cfg
-        # TODO: may change num_points
         obs, reward, done, _ = env.step(action)
         env.render()
         
@@ -109,10 +108,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     task_name = args.task_name
 
-    for index in TRAIN_CONFIG[task_name]['seen']:
-        gen_single_data(task_name, index, 'train', n_fold=32)
-    for index in TRAIN_CONFIG[task_name]['seen']:
-        gen_single_data(task_name, index, 'val', n_fold=4)
-    for index in TRAIN_CONFIG[task_name]['unseen']:
-        gen_single_data(task_name, index, 'test', n_fold=4)
+    # for index in TRAIN_CONFIG[task_name]['seen']:
+    #     gen_single_data(task_name, index, 'train', n_fold=32)
+    # for index in TRAIN_CONFIG[task_name]['seen']:
+    #     gen_single_data(task_name, index, 'val', n_fold=4)
+    # for index in TRAIN_CONFIG[task_name]['unseen']:
+    #     gen_single_data(task_name, index, 'test', n_fold=4)
     merge_data(task_name)
