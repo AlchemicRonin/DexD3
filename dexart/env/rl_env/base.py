@@ -102,6 +102,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.robot = load_atlas(self.scene, disable_self_collision=False)
         
         self.robot.set_pose(sapien.Pose(np.array([0, 0, 0])))
+        self.robot.set_qpos([-1.57, 0 ,0 ,0 ,0 ,0, 0 ] + [1.57, 0 ,0 ,0 ,0 ,0, 0 ] + [0] * 16)
         self.is_robot_free = "free" in robot_name
         self.is_atlas = "atlas" in robot_name
 
