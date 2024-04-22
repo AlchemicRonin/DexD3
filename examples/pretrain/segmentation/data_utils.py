@@ -7,12 +7,13 @@ import torch
 
 # train set: data/faucet_img/train.npy
 class SemSegDataset(Dataset):
-    def __init__(self, root_dir='data/laptop', split='train', use_img=True, point_channel=3, half=False):
+    def __init__(self, root_dir='data/laptop', split='train', use_img=True, only_img=False, point_channel=3, half=False):
         self.root_dir = root_dir
         self.half = half
         self.split = split
         self.data = self.load_data()
         self.use_img = use_img
+        self.only_img = only_img
         self.point_channel = point_channel
         self.labelweights = np.ones(4)
 
@@ -34,6 +35,7 @@ class SemSegDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         num_point, num_channel = sample.shape
+
         if self.use_img:
             points = sample[:, 0:self.point_channel]
             # argmax will confuse with all 0 and first class
@@ -41,6 +43,14 @@ class SemSegDataset(Dataset):
             labels = np.argmax(
                 np.concatenate([sample[:, 3:],np.ones((num_point, 1))],axis=1), 
                 axis=1)
+            
+        if self.only_img:
+            # only use image as input
+            points = sample[512:, 0:self.point_channel]
+            labels = np.argmax(
+                np.concatenate([sample[512:, 3:],np.ones((160, 1))],axis=1),
+                axis=1)
+            
         else:
             # only use camera-captured point cloud as input
             points = sample[0:512, 0:self.point_channel]  
@@ -58,7 +68,7 @@ if __name__ == '__main__':
     from icecream import ic, install
 
     install()
-    dataset = SemSegDataset(split='train')
+    dataset = SemSegDataset(split='train', only_img=True)
     for i in tqdm(range(len(dataset))):
         idx = np.random.randint(0, len(dataset))
         pc, label = dataset[idx]
