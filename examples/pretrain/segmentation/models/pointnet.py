@@ -6,7 +6,7 @@ install()
 ic.configureOutput(includeContext=True, contextAbsPath=True, prefix='File ')
 
 class PointNet(nn.Module): # actually pointnet
-    def __init__(self, point_channel=3, classes=4):
+    def __init__(self, point_channel=3, classes=9):
         super(PointNet, self).__init__()
 
         print(f'PointNet')
@@ -55,7 +55,7 @@ class PointNet(nn.Module): # actually pointnet
 
 
 class PointNetMedium(nn.Module): # actually pointnet
-    def __init__(self, point_channel=3, classes=4):
+    def __init__(self, point_channel=3, classes=9):
         super(PointNetMedium, self).__init__()
 
         print(f'PointNet')
@@ -109,7 +109,7 @@ class PointNetMedium(nn.Module): # actually pointnet
 
 
 class PointNetLarge(nn.Module): # actually pointnet
-    def __init__(self, point_channel=3, classes=4):
+    def __init__(self, point_channel=3, classes=9):
         super(PointNetLarge, self).__init__()
 
         print(f'PointNet')

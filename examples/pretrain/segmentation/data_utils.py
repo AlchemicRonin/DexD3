@@ -55,7 +55,7 @@ class SemSegDataset(Dataset):
             # only use camera-captured point cloud as input
             points = sample[0:512, 0:self.point_channel]  
             labels = np.argmax(
-                np.concatenate([sample[0:512, 3:],np.ones((num_point, 1))],axis=1),
+                np.concatenate([sample[0:512, 3:],np.ones((512, 1))],axis=1),
                 axis=1)
         return torch.tensor(points), torch.tensor(labels)
 
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     from icecream import ic, install
 
     install()
-    dataset = SemSegDataset(split='train', only_img=True)
+    dataset = SemSegDataset(split='train')
     for i in tqdm(range(len(dataset))):
         idx = np.random.randint(0, len(dataset))
         pc, label = dataset[idx]

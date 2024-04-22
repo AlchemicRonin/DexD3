@@ -19,3 +19,4 @@ examples/model_*zip
 
 .vscode/
 data/
+log/

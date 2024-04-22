@@ -153,7 +153,7 @@ class Solver(object):
                 pc = points.float().cpu().numpy()[0]
                 labels = labels.long().cpu().numpy()[0]
                 pred_labels = predicted.cpu().numpy()[0]
-                colors = plt.get_cmap("tab20")(pred_labels / 4).reshape(-1, 4)
+                colors = plt.get_cmap("tab20")(pred_labels / 8).reshape(-1, 4)
 
                 obs_cloud = o3d.geometry.PointCloud(points=o3d.utility.Vector3dVector(pc[..., 0:3]))
                 obs_cloud.colors = o3d.utility.Vector3dVector(colors[:, 0:3])
@@ -193,7 +193,7 @@ def main():
         'log_dir': f'log/segmentation/{arch}/{cat}/{run}',
         'arch': arch,
         'lr': 1e-3,
-        'classes': 4,
+        'classes': 9,
         'save_step': 20,
         'cat': cat,
     }
