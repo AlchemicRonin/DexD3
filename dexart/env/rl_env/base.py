@@ -89,7 +89,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
     @property
     def action_dim(self):
-        return self.robot.dof
+        return 12+16
 
     @property
     @abstractmethod
@@ -382,12 +382,15 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             'r_handle': self.r_handle_id,
             'l_handle': self.l_handle_id,
             'instance_body': self.instance_ids_without_handle,  # include handle
+            
             'thumb': self.thumb_ids,
             'index': self.index_ids,
             'middle': self.middle_ids,
             'ring': self.ring_ids,
+            
             'r_palm': self.r_palm_id,
             'l_palm': self.l_palm_id,
+            
             'r_arm': self.r_arm_id,
             'l_arm': self.l_arm_id,
         }
@@ -540,12 +543,15 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                     pose = self.robot.get_pose().inv() * actor.get_pose()
                     mat = pose.to_transformation_matrix()
                     transformed_points = points @ mat[:3, :3].T + mat[:3, 3][None, :]
-                    seg_vector = np.zeros((1, 4))
+                    seg_vector = np.zeros((1, 8))
                     # TODO: change links to arms of the atlas version
                     if link_name in ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]:  # arm
-                        seg_vector[0, 3] = 1
+                        # seg_vector[0, 3] = 1
+                        raise NotImplementedError("currently no imagination for arm")
                     else:  # hand
-                        seg_vector[0, 2] = 1
+                        seg_vector[0, -1] = 1
+                    
+
                     seg_vector = np.repeat(seg_vector, transformed_points.shape[0], axis=0)  # Ni * 4
                     transformed_points = np.concatenate([transformed_points, seg_vector], axis=1)  # Ni * 7
                     imagination_robot.append(transformed_points)
@@ -653,11 +659,11 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                                      num_points=camera_cfg['point_cloud']['num_points'], np_random=self.np_random,
                                      grouping_info=self.grouping_info, segmentation=obs_seg, **kwargs)
                     obs_dict[f"{name}-seg_gt"] = obs[:, 3:]  # NOTE: add gt segmentation
-                    if obs_dict[f"{name}-seg_gt"].shape != (camera_cfg["point_cloud"]["num_points"], 4):
+                    if obs_dict[f"{name}-seg_gt"].shape != (camera_cfg["point_cloud"]["num_points"], 8):
                         # align the gt segmentation mask
                         # ??? if there is no enough points, it return a all zero mask, it is correct?
                         print(f"No enough points, find failure rate!")
-                        obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 4))
+                        obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 8))
                     obs = obs[:, :3]
                 else:
                     dl_tensor = dl_list[i]

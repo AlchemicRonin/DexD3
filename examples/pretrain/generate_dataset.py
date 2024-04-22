@@ -10,7 +10,7 @@ from sapien.utils import Viewer
 
 def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_path='data/'):
     env = create_env(task_name=task_name,
-                     use_gui=False,
+                     use_gui=True,
                      is_eval=False,
 
                      use_visual_obs=True,
@@ -39,9 +39,7 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
         # TODO: may change num_points
         obs, reward, done, _ = env.step(action)
         env.render()
-
         
-
         qlimits = env.instance.get_qlimits()
         # random qpos
         qpos = np.random.uniform(qlimits[:, 0], qlimits[:, 1])
@@ -49,7 +47,7 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
 
         observed_pc = np.concatenate([obs['instance_1-point_cloud'], obs['instance_1-seg_gt']], axis=1)
         observed_pc = np.concatenate([observed_pc, obs['imagination_robot']], axis=0)
-        assert observed_pc.shape == (608, 7)
+        assert observed_pc.shape == (608, 11)
         pc_data.append(observed_pc)
         env.scene.update_render()
 
