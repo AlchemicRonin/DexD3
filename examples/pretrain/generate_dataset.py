@@ -108,10 +108,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     task_name = args.task_name
 
-    # for index in TRAIN_CONFIG[task_name]['seen']:
-    #     gen_single_data(task_name, index, 'train', n_fold=32)
-    # for index in TRAIN_CONFIG[task_name]['seen']:
-    #     gen_single_data(task_name, index, 'val', n_fold=4)
-    # for index in TRAIN_CONFIG[task_name]['unseen']:
-    #     gen_single_data(task_name, index, 'test', n_fold=4)
+    for index in TRAIN_CONFIG[task_name]['seen']:
+        gen_single_data(task_name, index, 'train', n_fold=32)
+    for index in TRAIN_CONFIG[task_name]['seen']:
+        gen_single_data(task_name, index, 'val', n_fold=4)
+    for index in TRAIN_CONFIG[task_name]['unseen']:
+        gen_single_data(task_name, index, 'test', n_fold=4)
     merge_data(task_name)

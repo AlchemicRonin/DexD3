@@ -22,6 +22,9 @@
     - [ ] imagination is not finished yet
     - run: `python examples/pretrain/generate_dataset.py --task_name=laptop`
       - **you may set `use_gui=False` to speed up**
+      - **you may set smaller `n_fold` (=1) to speed up**
+    - run: `python examples/pretrain/segmentation/data_utils.py`
+      - show the result of generated data
 - 0406: 
   - bimanual RL env step done
   - run: `python examples/random_action.py --task_name=laptop`

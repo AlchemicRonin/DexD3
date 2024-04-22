@@ -33,13 +33,20 @@ class SemSegDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.data[idx]
+        num_point, num_channel = sample.shape
         if self.use_img:
             points = sample[:, 0:self.point_channel]
-            labels = np.argmax(sample[:, 3:], axis=1)
+            # argmax will confuse with all 0 and first class
+            # add a dummy class to avoid this (range [0,8], 8 for dummy class)
+            labels = np.argmax(
+                np.concatenate([sample[:, 3:],np.ones((num_point, 1))],axis=1), 
+                axis=1)
         else:
             # NOTE: only use the first 7 channels including xyz + labels!! (imagination)
             points = sample[0:512, 0:self.point_channel]  
-            labels = np.argmax(sample[0:512, 3:], axis=1)
+            labels = np.argmax(
+                np.concatenate([sample[0:512, 3:],np.ones((num_point, 1))],axis=1),
+                axis=1)
         return torch.tensor(points), torch.tensor(labels)
 
 
@@ -55,8 +62,8 @@ if __name__ == '__main__':
     for i in tqdm(range(len(dataset))):
         idx = np.random.randint(0, len(dataset))
         pc, label = dataset[idx]
-        # TODO: channel (num_mush) is changed
-        colors = plt.get_cmap("tab20")(label / 8).reshape(-1, 8)
+        # TODO: channel (num_mask) is changed
+        colors = plt.get_cmap("tab20")(label).reshape(-1, 4)
 
         obs_cloud = o3d.geometry.PointCloud(points=o3d.utility.Vector3dVector(pc[..., 0:3]))
         obs_cloud.colors = o3d.utility.Vector3dVector(colors[:, 0:3])
