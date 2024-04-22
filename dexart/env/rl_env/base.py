@@ -541,19 +541,28 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             elif img_type == "robot":
                 imagination_robot = []
                 for link_name, (actor, points, img_class) in img_config.items():
+
+                    # transform points to robot base first
+                    # points = points + self.robot.get_pose().to_transformation_matrix()[:3, 3][None, :]
+                    
                     pose = self.robot.get_pose().inv() * actor.get_pose()
                     mat = pose.to_transformation_matrix()
                     transformed_points = points @ mat[:3, :3].T + mat[:3, 3][None, :]
                     seg_vector = np.zeros((1, 8))
-                    # TODO: change links to arms of the atlas version
-                    if link_name in ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]:  # arm
+
+
+                    if link_name in ["l_lfarm", "l_ufarm", "l_larm", "l_uarm"]:  # left arm
                         # seg_vector[0, 3] = 1
-                        raise NotImplementedError("currently no imagination for arm")
+                        # raise NotImplementedError("currently no imagination for arm")
+                        seg_vector[0, 3] = 1
+                    elif link_name in ["r_lfarm", "r_ufarm", "r_larm", "r_uarm"]:  # right arm
+                        seg_vector[0, 4] = 1
                     else:  # hand
                         seg_vector[0, -1] = 1
                     
 
                     seg_vector = np.repeat(seg_vector, transformed_points.shape[0], axis=0)  # Ni * 4
+                    assert seg_vector.shape == (transformed_points.shape[0], 8)
                     transformed_points = np.concatenate([transformed_points, seg_vector], axis=1)  # Ni * 7
                     imagination_robot.append(transformed_points)
                 self.imaginations["imagination_robot"] = np.concatenate(imagination_robot, axis=0)  # sum(Ni) * 7

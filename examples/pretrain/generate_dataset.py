@@ -46,7 +46,7 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
 
         observed_pc = np.concatenate([obs['instance_1-point_cloud'], obs['instance_1-seg_gt']], axis=1)
         observed_pc = np.concatenate([observed_pc, obs['imagination_robot']], axis=0)
-        assert observed_pc.shape == (608, 11)
+        assert observed_pc.shape == (672, 11)
         pc_data.append(observed_pc)
         env.scene.update_render()
 
@@ -109,9 +109,9 @@ if __name__ == '__main__':
     task_name = args.task_name
 
     for index in TRAIN_CONFIG[task_name]['seen']:
-        gen_single_data(task_name, index, 'train', n_fold=32)
+        gen_single_data(task_name, index, 'train', n_fold=1)
     for index in TRAIN_CONFIG[task_name]['seen']:
-        gen_single_data(task_name, index, 'val', n_fold=4)
+        gen_single_data(task_name, index, 'val', n_fold=1)
     for index in TRAIN_CONFIG[task_name]['unseen']:
-        gen_single_data(task_name, index, 'test', n_fold=4)
+        gen_single_data(task_name, index, 'test', n_fold=1)
     merge_data(task_name)

@@ -284,6 +284,14 @@ IMG_CONFIG = {
             "link_2.0": 8,
             "link_6.0": 8,
             "link_10.0": 8,  # "base_link": 8
+            "l_lfarm": 8,
+            "l_ufarm": 8,
+            "l_larm": 8,
+            "l_uarm": 8,
+            "r_lfarm": 8,
+            "r_ufarm": 8,
+            "r_larm": 8,
+            "r_uarm": 8,
         },
     }
 }
