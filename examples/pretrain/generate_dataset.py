@@ -24,11 +24,11 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
                      )
     obs = env.reset()
 
-    viewer = Viewer(env.renderer)
-    viewer.set_scene(env.scene)
-    viewer.focus_camera(env.cameras['instance_1'])
-    env.viewer = viewer
-    env.render()
+    # viewer = Viewer(env.renderer)
+    # viewer.set_scene(env.scene)
+    # viewer.focus_camera(env.cameras['instance_1'])
+    # env.viewer = viewer
+    # env.render()
 
     pc_data = []
     for i in tqdm(range(env.horizon * n_fold)):
@@ -37,7 +37,7 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
         # step: RLbaseEnv -> step -> get_visual_observation -> get_camera_obs
         # config: createEnv.setup_visual_obs_config -> task_setting.py:OBS_CONFIG -> camera_cfg
         obs, reward, done, _ = env.step(action)
-        env.render()
+        # env.render()
         
         qlimits = env.instance.get_qlimits()
         # random qpos

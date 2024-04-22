@@ -63,7 +63,7 @@ if __name__ == '__main__':
         idx = np.random.randint(0, len(dataset))
         pc, label = dataset[idx]
         # TODO: channel (num_mask) is changed
-        colors = plt.get_cmap("tab20")(label).reshape(-1, 4)
+        colors = plt.get_cmap("tab20")(label/8).reshape(-1, 4)
 
         obs_cloud = o3d.geometry.PointCloud(points=o3d.utility.Vector3dVector(pc[..., 0:3]))
         obs_cloud.colors = o3d.utility.Vector3dVector(colors[:, 0:3])
