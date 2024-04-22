@@ -42,7 +42,7 @@ class SemSegDataset(Dataset):
                 np.concatenate([sample[:, 3:],np.ones((num_point, 1))],axis=1), 
                 axis=1)
         else:
-            # NOTE: only use the first 7 channels including xyz + labels!! (imagination)
+            # only use camera-captured point cloud as input
             points = sample[0:512, 0:self.point_channel]  
             labels = np.argmax(
                 np.concatenate([sample[0:512, 3:],np.ones((num_point, 1))],axis=1),
@@ -62,7 +62,6 @@ if __name__ == '__main__':
     for i in tqdm(range(len(dataset))):
         idx = np.random.randint(0, len(dataset))
         pc, label = dataset[idx]
-        # TODO: channel (num_mask) is changed
         colors = plt.get_cmap("tab20")(label/8).reshape(-1, 4)
 
         obs_cloud = o3d.geometry.PointCloud(points=o3d.utility.Vector3dVector(pc[..., 0:3]))

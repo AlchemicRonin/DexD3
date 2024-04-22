@@ -72,23 +72,7 @@ def process_pc(task_name: str, cloud: np.ndarray, camera_pose: np.ndarray, num_p
 
         hand_mask = np.logical_or.reduce([thumb_mask, index_mask, middle_mask, ring_mask, r_palm_mask])
 
-        # handle_mask = (labels == grouping_info['handle'])
-
-        # # group the instance body
-        # instance_body_mask = (labels == grouping_info['instance_body'][0])
-        # for instance_body_id in grouping_info['instance_body']:
-        #     instance_body_mask = np.logical_or(labels == instance_body_id, instance_body_mask)
-
-        # # group the arm
-        # #TODO: the dual-arm version joints should handdle, see BaseRLEnv.configure_robot_contact_reward for details  
-        # l_arm_mask = np.logical_and(labels < grouping_info['l_arm'][0], labels > grouping_info['l_arm'][-1])
-        # arm_mask = np.logical_and(labels < grouping_info['palm'][0], labels > grouping_info['palm'][0] - 8)  # 13, [6,12]
-        # hand_mask = (labels == grouping_info['palm'][0])
-        # for instance in grouping_info['palm'] + grouping_info['thumb'] + grouping_info['index'] + grouping_info['middle'] + grouping_info['ring']:
-        #     hand_mask = np.logical_or(labels == instance, hand_mask)
-
-        # (N, 7) == (N, xyz + 4masks)
-        # TODO: add arm_right_mask and right_ball
+        # (N, 11) == (N, xyz + 8masks)
         cloud = np.concatenate([pc, 
                                 r_handle_mask,
                                 l_handle_mask,
