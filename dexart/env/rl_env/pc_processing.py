@@ -36,6 +36,7 @@ def process_pc(task_name: str, cloud: np.ndarray, camera_pose: np.ndarray, num_p
     if num_index == 0:
         return np.zeros([num_points, 3])
     if num_index < num_points:
+        # repeat first point as padding at the end
         indices = np.concatenate([within_bound, np.ones(num_points - num_index, dtype=np.int32) * within_bound[0]])
         if noise_level != 0:
             multiplicative_noise = 1 + np_random.randn(num_index)[:, None] * 0.01 * noise_level  # (num_index, 1)
@@ -55,20 +56,32 @@ def process_pc(task_name: str, cloud: np.ndarray, camera_pose: np.ndarray, num_p
 
     if segmentation is not None:
         labels = segmentation[indices, :]   # N x 1
-        handle_mask = (labels == grouping_info['handle'])
-        # group the instance body
-        instance_body_mask = (labels == grouping_info['instance_body'][0])
-        for instance_body_id in grouping_info['instance_body']:
-            instance_body_mask = np.logical_or(labels == instance_body_id, instance_body_mask)
+        # handle
+        r_handle_mask = np.isin(labels, grouping_info['r_handle'])
+        l_handle_mask = np.isin(labels, grouping_info['l_handle'])
+        instance_body_mask = np.isin(labels, grouping_info['instance_body'])
+        l_arm_mask = np.isin(labels, grouping_info['l_arm'])
+        r_arm_mask = np.isin(labels, grouping_info['r_arm'])
+        l_palm_mask = np.isin(labels, grouping_info['l_palm'])
+        r_palm_mask = np.isin(labels, grouping_info['r_palm'])
 
-        # group the arm
-        arm_mask = np.logical_and(labels < grouping_info['palm'][0], labels > grouping_info['palm'][0] - 8)  # 13, [6,12]
-        hand_mask = (labels == grouping_info['palm'][0])
-        for instance in grouping_info['palm'] + grouping_info['thumb'] + grouping_info['index'] + grouping_info['middle'] + grouping_info['ring']:
-            hand_mask = np.logical_or(labels == instance, hand_mask)
+        thumb_mask = np.isin(labels, grouping_info['thumb'])
+        index_mask = np.isin(labels, grouping_info['index'])
+        middle_mask = np.isin(labels, grouping_info['middle'])
+        ring_mask = np.isin(labels, grouping_info['ring'])
 
-        cloud = np.concatenate([pc, handle_mask, instance_body_mask, hand_mask, arm_mask], axis=1)
-        # (N, 7) == (N, xyz + 4masks)
+        hand_mask = np.logical_or.reduce([thumb_mask, index_mask, middle_mask, ring_mask, r_palm_mask])
+
+        # (N, 11) == (N, xyz + 8masks)
+        cloud = np.concatenate([pc, 
+                                r_handle_mask,
+                                l_handle_mask,
+                                instance_body_mask,
+                                l_arm_mask,
+                                r_arm_mask,
+                                l_palm_mask,
+                                r_palm_mask,
+                                hand_mask], axis=1)
 
     return cloud
 

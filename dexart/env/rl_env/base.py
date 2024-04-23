@@ -11,7 +11,7 @@ from dexart.env.sim_env.base import BaseSimulationEnv
 from dexart.env.sim_env.constructor import add_default_scene_light
 from dexart.utils.kinematics_helper import PartialKinematicModel
 from dexart.utils.common_robot_utils import load_robot, generate_arm_robot_hand_info, \
-    generate_free_robot_hand_info, FreeRobotInfo, ArmRobotInfo
+    generate_free_robot_hand_info, FreeRobotInfo, ArmRobotInfo, load_atlas, generate_atlas_info
 from dexart.utils.random_utils import np_random
 from dexart.utils.render_scene_utils import actor_to_open3d_mesh
 
@@ -89,7 +89,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
     @property
     def action_dim(self):
-        return self.robot.dof
+        return 12+16
 
     @property
     @abstractmethod
@@ -98,16 +98,44 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
     def setup(self, robot_name):
         self.robot_name = robot_name
-        self.robot = load_robot(self.scene, robot_name, disable_self_collision=False)
-        self.robot.set_pose(sapien.Pose(np.array([0, 0, -5])))
+        # self.robot = load_robot(self.scene, robot_name, disable_self_collision=False)
+        self.robot = load_atlas(self.scene, disable_self_collision=False)
+        
+        self.robot.set_pose(sapien.Pose(np.array([0, 0, 0])))
+        self.robot.set_qpos([-1.57, 0 ,0 ,0 ,0 ,0, 0 ] + [1.57, 0 ,0 ,0 ,0 ,0, 0 ] + [0] * 16)
         self.is_robot_free = "free" in robot_name
-        if self.is_robot_free:
-            info = generate_free_robot_hand_info()[robot_name]
-            velocity_limit = np.array([1.0] * 3 + [1.57] * 3 + [3.14] * (self.robot.dof - 6))
+        self.is_atlas = "atlas" in robot_name
+
+        if self.is_atlas:
+            self.arm_dof = 7
+            self.hand_dof = 16
+            velocity_limit = np.array([1] * 12 + [np.pi] * self.hand_dof)
             self.velocity_limit = np.stack([-velocity_limit, velocity_limit], axis=1)
-            init_pose = sapien.Pose(np.array([-0.4, 0, 0.2]), transforms3d.euler.euler2quat(0, np.pi / 2, 0))
-            self.robot.set_pose(init_pose)
-            self.arm_dof = 0
+            l_start_joint_name = self.robot.get_active_joints()[0].get_name()
+            l_end_joint_name = self.robot.get_active_joints()[self.arm_dof - 1].get_name()
+            r_start_joint_name = self.robot.get_active_joints()[self.arm_dof].get_name()
+            r_end_joint_name = self.robot.get_active_joints()[self.arm_dof + self.arm_dof - 1].get_name()
+            # print("l_start_joint_name", l_start_joint_name, 
+            #       "l_end_joint_name", l_end_joint_name,
+            #         "r_start_joint_name", r_start_joint_name,
+            #         "r_end_joint_name", r_end_joint_name)
+            # for link in self.robot.get_links():
+            #     print(link.get_name(), " ", link.get_id())
+
+            self.l_kinematic_model = PartialKinematicModel(self.robot, l_start_joint_name, l_end_joint_name)
+            self.r_kinematic_model = PartialKinematicModel(self.robot, r_start_joint_name, r_end_joint_name)
+
+            self.l_ee_link_name = self.l_kinematic_model.end_link_name
+            self.r_ee_link_name = self.r_kinematic_model.end_link_name
+            # for link in self.robot.get_links():
+            #     print(link.get_name())
+            # print("l_ee_link_name", self.l_ee_link_name, "r_ee_link_name", self.r_ee_link_name)
+            
+            self.l_ee_link = [link for link in self.robot.get_links() if link.get_name() == self.l_ee_link_name][0]
+            # print("l_ee_link", self.l_ee_link)
+            self.r_ee_link = [link for link in self.robot.get_links() if link.get_name() == self.r_ee_link_name][0]
+            info = generate_atlas_info()
+            
         else:
             info = generate_arm_robot_hand_info()[robot_name]
             self.arm_dof = info.arm_dof
@@ -127,6 +155,8 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         # Choose different step function
         if self.is_robot_free:
             self.rl_step = self.free_sim_step
+        if self.is_atlas:
+            self.rl_step = self.atlas_sim_step
         else:
             self.rl_step = self.arm_sim_step
 
@@ -178,6 +208,51 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         ee_link_new_pose = self.ee_link.get_pose()
         relative_pos = ee_link_new_pose.p - ee_link_last_pose.p
         self.cartesian_error = np.linalg.norm(relative_pos - target_root_velocity[:3] * self.control_time_step)
+
+    def atlas_sim_step(self, action: np.ndarray):
+        current_qpos = self.robot.get_qpos()
+        l_ee_link_last_pose = self.l_ee_link.get_pose()
+        r_ee_link_last_pose = self.r_ee_link.get_pose()
+        action = np.clip(action, -1, 1)
+        l_target_root_velocity = recover_action(action[:6], self.velocity_limit[:6])
+        r_target_root_velocity = recover_action(action[6:12], self.velocity_limit[:6])
+        l_palm_jacobian = self.l_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[:self.arm_dof])
+        r_palm_jacobian = self.r_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[self.arm_dof:self.arm_dof * 2])
+        l_arm_qvel = compute_inverse_kinematics(l_target_root_velocity, l_palm_jacobian)[:self.arm_dof]
+        r_arm_qvel = compute_inverse_kinematics(r_target_root_velocity, r_palm_jacobian)[:self.arm_dof]
+        l_arm_qvel = np.clip(l_arm_qvel, -np.pi / 1, np.pi / 1)
+        r_arm_qvel = np.clip(r_arm_qvel, -np.pi / 1, np.pi / 1)
+        l_arm_qpos = l_arm_qvel * self.control_time_step + self.robot.get_qpos()[:self.arm_dof]
+        r_arm_qpos = r_arm_qvel * self.control_time_step + self.robot.get_qpos()[self.arm_dof:self.arm_dof * 2]
+
+        # print("q_limits", self.robot.get_qlimits())
+
+        hand_qpos = recover_action(action[12:], self.robot.get_qlimits()[14:])
+
+        target_q_pos = np.concatenate([l_arm_qpos, r_arm_qpos, hand_qpos])
+        target_q_vel = np.zeros_like(target_q_pos)
+        target_q_vel[:self.arm_dof] = l_arm_qvel
+        target_q_vel[self.arm_dof:self.arm_dof * 2] = r_arm_qvel
+
+        self.robot.set_drive_target(target_q_pos)
+        self.robot.set_drive_velocity_target(target_q_vel)
+
+        for i in range(self.frame_skip):
+            self.robot.set_qf(self.robot.compute_passive_force(external=False, coriolis_and_centrifugal=False))
+            self.scene.step()
+        self.current_step += 1
+
+        l_ee_link_new_pose = self.l_ee_link.get_pose()
+        r_ee_link_new_pose = self.r_ee_link.get_pose()
+        l_relative_pos = l_ee_link_new_pose.p - l_ee_link_last_pose.p
+        r_relative_pos = r_ee_link_new_pose.p - r_ee_link_last_pose.p
+        self.l_cartesian_error = np.linalg.norm(l_relative_pos - l_target_root_velocity[:3] * self.control_time_step)
+        self.r_cartesian_error = np.linalg.norm(r_relative_pos - r_target_root_velocity[:3] * self.control_time_step)
+
+
+
+
+        
 
     def arm_kinematic_step(self, action: np.ndarray):
         """
@@ -231,13 +306,18 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
     def configure_robot_contact_reward(self):
         if self.is_robot_free:
             info = generate_free_robot_hand_info()[self.robot_name]
+        elif self.is_atlas:
+            info = generate_atlas_info()[self.robot_name]
         else:
             info = generate_arm_robot_hand_info()[self.robot_name]
         robot_link_names = [link.get_name() for link in self.robot.get_links()]
         robot_links = self.robot.get_links()
         # configure palm
-        self.palm_link_name = info.palm_name
-        self.palm_link = [link for link in self.robot.get_links() if link.get_name() == 'base_link'][0]
+        self.r_palm_link_name = info.palm_name
+        self.l_palm_link_name = 'l_hand'
+        self.r_palm_link = [link for link in self.robot.get_links() if link.get_name() == 'base_link'][0]
+        self.l_palm_link = [link for link in self.robot.get_links() if link.get_name() == 'l_hand'][0]
+
         # configure fingers
         finger_tip_names = ["link_15.0_tip", "link_3.0_tip", "link_7.0_tip", "link_11.0_tip"]
         thumb_link_name = ["link_15.0_tip", "link_15.0", "link_14.0"]
@@ -254,36 +334,66 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.finger_tip_pos = np.zeros([len(finger_tip_names), 3])
         self.finger_reward_scale = np.ones(len(self.finger_tip_links)) * 0.01
         self.finger_reward_scale[0] = 0.04
+
+        # configure ball of left hand
+
+
         # configure arm
-        arm_contact_link_name = ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]
+        l_arm_contact_link_name = ["l_clav", "l_scap", "l_uarm", "l_larm", "l_ufarm", "l_lfarm"]
+        r_arm_contact_link_name = ["r_clav", "r_scap", "r_uarm", "r_larm", "r_ufarm", "r_lfarm"]
+        
+
         self.arm_contact_links = [self.robot.get_links()[robot_link_names.index(name)] for name in
-                                  arm_contact_link_name]
-        self.robot_object_contact = np.zeros(len(finger_tip_names) + 1)  # contact buffer of four tip and palm
-        self.robot_object_contact_handle = np.zeros(len(finger_tip_names) + 1)
-        self.robot_object_contact_no_handle = np.zeros(len(finger_tip_names) + 1)
+                                  l_arm_contact_link_name + r_arm_contact_link_name]
+        self.l_arm_contact_links = [self.robot.get_links()[robot_link_names.index(name)] for name in
+                                  l_arm_contact_link_name]
+        self.r_arm_contact_links = [self.robot.get_links()[robot_link_names.index(name)] for name in
+                                  r_arm_contact_link_name]
+        self.l_arm_id = [link.get_id() for link in self.l_arm_contact_links]
+        self.r_arm_id = [link.get_id() for link in self.r_arm_contact_links]
+        
+        self.finger_object_contact = np.zeros(len(finger_tip_names) + 1)  # contact buffer of four tip and palm
+        self.ball_object_contact = np.zeros(1)  # contact buffer of a ball
+        # not used
+        #self.finger_object_contact_handle = np.zeros(len(finger_tip_names) + 1)
+        #self.finger_object_contact_no_handle = np.zeros(len(finger_tip_names) + 1)
+        
         self.hand_base_contact = np.zeros(len(finger_tip_names) + 1)
         self.robot_instance_base_contact = np.zeros(len(finger_tip_names) + 1)
+
         # configure hand / palm /robot id (for segmentation)
         self.thumb_ids = [link.get_id() for link in self.thumb_links] + [
             robot_links[robot_link_names.index("link_13.0")].get_id()]
+        
         self.index_ids = [link.get_id() for link in self.index_links] + [
             robot_links[robot_link_names.index("link_0.0")].get_id()]
+        
         self.middle_ids = [link.get_id() for link in self.middle_links] + [
             robot_links[robot_link_names.index("link_4.0")].get_id()]
+        
         self.ring_ids = [link.get_id() for link in self.ring_links] + [
             robot_links[robot_link_names.index("link_8.0")].get_id()]
-        self.palm_id = [self.palm_link.get_id()] + [robot_links[robot_link_names.index("link_12.0")].get_id()]
-
+        
+        self.r_palm_id = [self.r_palm_link.get_id()] + [robot_links[robot_link_names.index("link_12.0")].get_id()]
+        self.l_palm_id = [self.l_palm_link.get_id()]
+        
     @property
     def grouping_info(self):
         return {
-            'handle': self.handle_id,
+            'r_handle': self.r_handle_id,
+            'l_handle': self.l_handle_id,
             'instance_body': self.instance_ids_without_handle,  # include handle
+            
             'thumb': self.thumb_ids,
             'index': self.index_ids,
             'middle': self.middle_ids,
             'ring': self.ring_ids,
-            'palm': self.palm_id,
+            
+            'r_palm': self.r_palm_id,
+            'l_palm': self.l_palm_id,
+            
+            'r_arm': self.r_arm_id,
+            'l_arm': self.l_arm_id,
         }
 
     def setup_visual_obs_config(self, config: Dict[str, Dict]):
@@ -431,15 +541,28 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
             elif img_type == "robot":
                 imagination_robot = []
                 for link_name, (actor, points, img_class) in img_config.items():
+
+                    # transform points to robot base first
+                    # points = points + self.robot.get_pose().to_transformation_matrix()[:3, 3][None, :]
+                    
                     pose = self.robot.get_pose().inv() * actor.get_pose()
                     mat = pose.to_transformation_matrix()
                     transformed_points = points @ mat[:3, :3].T + mat[:3, 3][None, :]
-                    seg_vector = np.zeros((1, 4))
-                    if link_name in ["link_base", "link1", "link2", "link3", "link4", "link5", "link6"]:  # arm
+                    seg_vector = np.zeros((1, 8))
+
+
+                    if link_name in ["l_lfarm", "l_ufarm", "l_larm", "l_uarm"]:  # left arm
+                        # seg_vector[0, 3] = 1
+                        # raise NotImplementedError("currently no imagination for arm")
                         seg_vector[0, 3] = 1
+                    elif link_name in ["r_lfarm", "r_ufarm", "r_larm", "r_uarm"]:  # right arm
+                        seg_vector[0, 4] = 1
                     else:  # hand
-                        seg_vector[0, 2] = 1
+                        seg_vector[0, -1] = 1
+                    
+
                     seg_vector = np.repeat(seg_vector, transformed_points.shape[0], axis=0)  # Ni * 4
+                    assert seg_vector.shape == (transformed_points.shape[0], 8)
                     transformed_points = np.concatenate([transformed_points, seg_vector], axis=1)  # Ni * 7
                     imagination_robot.append(transformed_points)
                 self.imaginations["imagination_robot"] = np.concatenate(imagination_robot, axis=0)  # sum(Ni) * 7
@@ -486,6 +609,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         return camera_obs
 
     def get_camera_obs(self):
+        #TODO: change palm link to left or right
         if self.cameras.__contains__("hand"):
             sapien2opencv = np.array([[0, -1, 0], [0, 0, -1], [1, 0, 0]])
             sapien2opencv_quat = transforms3d.quaternions.mat2quat(sapien2opencv)
@@ -512,6 +636,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                     texture_names.append("Segmentation")
                 else:
                     raise ValueError(f"Visual modality {modality} not supported.")
+            # NOTE: sepian cam details in https://sapien.ucsd.edu/docs/latest/tutorial/rendering/camera.html
             await_dl_list = cam.take_picture_and_get_dl_tensors_async(texture_names)  # how is this done?
             dl_list = await_dl_list.wait()
 
@@ -521,8 +646,10 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                 if modality == "point_cloud" and camera_cfg["point_cloud"].get("use_seg") is True:
                     import torch
                     dl_tensor_seg = dl_list[i]
+                    # [H,W,4], 4 = 1 (mesh-level-seg) + 1 (actor-level-seg) + 2 (unknown but all zero)
                     output_array_seg = torch.from_dlpack(dl_tensor_seg).cpu().numpy()
                     i += 1
+                    # ???: why not use the same as output_array_seg?
                     dl_tensor_pos = dl_list[i]
                     shape = sapien.dlpack.dl_shape(dl_tensor_pos)
                     output_array_pos = np.zeros(shape, dtype=np.float32)
@@ -533,7 +660,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                         output_array_pos[..., :3],  # H, W, 3
                         (-1, 3))
                     obs_seg = np.reshape(
-                        output_array_seg[..., 1:2],  # H, W, 1
+                        output_array_seg[..., 1:2],  # H, W, 1 (actor-level-seg)
                         (-1, 1))
                     camera_pose = self.get_camera_to_robot_pose(name)
                     kwargs = camera_cfg["point_cloud"].get("process_fn_kwargs", {})
@@ -542,9 +669,11 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                                      num_points=camera_cfg['point_cloud']['num_points'], np_random=self.np_random,
                                      grouping_info=self.grouping_info, segmentation=obs_seg, **kwargs)
                     obs_dict[f"{name}-seg_gt"] = obs[:, 3:]  # NOTE: add gt segmentation
-                    if obs_dict[f"{name}-seg_gt"].shape != (camera_cfg["point_cloud"]["num_points"], 4):
+                    if obs_dict[f"{name}-seg_gt"].shape != (camera_cfg["point_cloud"]["num_points"], 8):
                         # align the gt segmentation mask
-                        obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 4))
+                        # ??? if there is no enough points, it return a all zero mask, it is correct?
+                        print(f"No enough points, find failure rate!")
+                        obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 8))
                     obs = obs[:, :3]
                 else:
                     dl_tensor = dl_list[i]

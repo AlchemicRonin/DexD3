@@ -27,6 +27,8 @@ class BaseSimulationEnv(object):
         self.use_gui = use_gui
         self.engine = engine
         self.renderer = renderer
+        print("render created")
+        print("renderer: ", renderer)
         self.frame_skip = frame_skip
 
         self.np_random = None
