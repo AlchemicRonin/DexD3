@@ -202,6 +202,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
             return len(self.get_robot_state())
 
     def is_done(self):
+        #TODO: done when the laptop is dropped or opened
         return (self.current_step >= self.horizon) or self.early_done
 
     @cached_property
