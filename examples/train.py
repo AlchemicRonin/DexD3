@@ -103,6 +103,7 @@ if __name__ == '__main__':
                 max_lr=args.lr,
                 adaptive_kl=0.02,
                 target_kl=0.2,
+                tensorboard_log=os.path.join(BASE_DIR, "logs"),
                 )
 
     if pretrain_path is not None:
