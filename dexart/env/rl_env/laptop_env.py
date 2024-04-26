@@ -65,7 +65,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.r_palm_v = self.r_palm_link.get_velocity()
         self.r_palm_w = self.r_palm_link.get_angular_velocity()
         trans_matrix = self.r_palm_pose.to_transformation_matrix()
-        self.palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
+        self.r_palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
 
         # left side (with ball)
         l_check_contact_links = [self.l_palm_link]
@@ -77,7 +77,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.l_palm_v = self.l_palm_link.get_velocity()
         self.l_palm_w = self.l_palm_link.get_angular_velocity()
         trans_matrix = self.l_palm_pose.to_transformation_matrix()
-        self.palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
+        self.l_palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
 
 
         # arm contact
@@ -122,9 +122,11 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
             self.r_palm_v, 
             self.r_palm_w, 
             self.r_palm_pose.p, 
+            self.r_palm_vector[-1:],
             self.l_palm_v, 
             self.l_palm_w, 
             self.l_palm_pose.p, 
+            self.l_palm_vector[-1:],
             [float(self.current_step) / float(self.horizon)]
         ])
 

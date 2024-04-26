@@ -8,7 +8,8 @@ ROBOT_TABLE_MARGIN_Y = 0.04
 # TODO: change the valid bound
 BOUND_CONFIG = {
     "faucet": [0.1, 2.0, -1.0, 1, -0.1352233 + 0.14, 0.4],
-    "bucket": [0.1, 2.0, -2.0, 2.0, -0.29, 0.4],
+    # "bucket": [0.1, 2.0, -2.0, 2.0, -0.29, 0.4],
+    "bucket": [-0.5, 1.4, -1.0, 1, -0.5, 3],
     "laptop": [-0.5, 1.4, -1.0, 1, -0.5, 3],
     "toilet": [0.1, 2.0, -2.0, 2, -0.3, 0.8],
 }
@@ -156,8 +157,10 @@ CAMERA_CONFIG = {
     "bucket": {
         "instance_1": dict(
             pose=sapien.Pose(
-                p=np.array([0, 1, 0.5]),
-                q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
+                # p=np.array([0, 1, 0.5]),
+                # q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
+                p=np.array([-0.55, 0, 1.2]),
+                q=transforms3d.euler.euler2quat(-np.pi*5/6 , 0, -np.pi/2),
             ),
             fov=np.deg2rad(69.4),
             resolution=(64, 64),
@@ -297,8 +300,8 @@ IMG_CONFIG = {
 }
 
 RANDOM_CONFIG = {
-    "bucket": {"rand_pos": 0.05, "rand_degree": 0},
-    "laptop": {"rand_pos": 0.1, "rand_degree": 60},
+    "bucket": {"rand_pos": 0.05, "rand_degree": 30},
+    "laptop": {"rand_pos": 0.1, "rand_degree": 30},
     "faucet": {"rand_pos": 0.1, "rand_degree": 90},
     "toilet": {"rand_pos": 0.2, "rand_degree": 45},
 }

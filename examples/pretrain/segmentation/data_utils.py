@@ -68,7 +68,7 @@ if __name__ == '__main__':
     from icecream import ic, install
 
     install()
-    dataset = SemSegDataset(split='train')
+    dataset = SemSegDataset(root_dir='data/bucket',split='train')
     for i in tqdm(range(len(dataset))):
         idx = np.random.randint(0, len(dataset))
         pc, label = dataset[idx]
