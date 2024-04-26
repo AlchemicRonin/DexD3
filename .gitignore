@@ -16,6 +16,7 @@ __pycache__/
 *.egg-info/
 *.ini
 examples/model_*zip
+examples/logs/
 
 .vscode/
 data/

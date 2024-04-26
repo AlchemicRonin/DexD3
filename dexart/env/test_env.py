@@ -6,7 +6,7 @@ from sapien.utils import Viewer
 
 
 if __name__ == '__main__':
-    print("000")
+    # print("000")
     env = LaptopRLEnv(use_gui=True, robot_name='atlas')
 
     # robot_dof = env.robot.dof
