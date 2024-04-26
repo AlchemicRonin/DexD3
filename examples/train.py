@@ -91,6 +91,7 @@ if __name__ == '__main__':
 
 
     env = SubprocVecEnv([create_env_fn] * args.workers, "spawn")  # train on a list of envs.
+    # env = create_env_fn()
 
     model = PPO("PointCloudPolicy", env, verbose=1,
                 n_epochs=args.ep,

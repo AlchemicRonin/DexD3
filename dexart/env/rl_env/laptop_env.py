@@ -17,11 +17,9 @@ from dexart.env import task_setting
 
 
 class GraspState(Enum):
-    LR_REACHING = 1
-    L_REACHING = 2
-    R_REACHING = 3
-    GRASPING = 4
-    GRASPED = 5
+    REACHING = 1
+    GRASPING = 2
+    GRASPED = 3
 
 class LaptopRLEnv(LaptopEnv, BaseRLEnv):
     def __init__(self, use_gui=False, frame_skip=5, robot_name="adroit_hand_free", friction=5, index=0, rand_pos=0.0,
@@ -40,7 +38,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         # self.robot_init_pose_l = sapien.Pose(np.array([-0.5, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
         # self.robot_l.set_pose(self.robot_init_pose_l)
 
-        self.robot_init_pose = sapien.Pose(np.array([-0.8, 0, -1]), transforms3d.euler.euler2quat(0, 0, 0))
+        self.robot_init_pose = sapien.Pose(np.array([-0.9, 0, -1.2]), transforms3d.euler.euler2quat(0, 0, 0))
         self.robot.set_pose(self.robot_init_pose)
 
         self.configure_robot_contact_reward()
@@ -100,20 +98,20 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.progress = 1 - openness / total
         self.r_handle_pose, self.l_handle_pose = self.get_handle_global_pose()
 
-        print("r_handle_pose:", self.r_handle_pose.p, "l_handle_pose:", self.l_handle_pose.p)
+        # print("r_handle_pose:", self.r_handle_pose.p, "l_handle_pose:", self.l_handle_pose.p)
 
         self.r_handle_in_palm = self.r_handle_pose.p - self.r_palm_pose.p
         self.l_handle_in_palm = self.l_handle_pose.p - self.l_palm_pose.p
 
-        # TODO: may use palm-palm / palm-handle to decide state
-        if np.linalg.norm(self.r_handle_in_palm) > 0.2 and np.linalg.norm(self.l_handle_in_palm) > 0.2:  
-            self.state = GraspState.LR_REACHING
-        elif np.linalg.norm(self.r_handle_in_palm) > 0.2:  
-            self.state = GraspState.R_REACHING
-        elif np.linalg.norm(self.l_handle_in_palm) > 0.2:
-            self.state = GraspState.L_REACHING
-            print("R Reached!")
-        elif not self.is_contact_finger:
+        # if np.sum(self.finger_object_contact) > 0:
+        #     print("right finger contacted")
+        # if self.ball_object_contact > 0:
+        #     print("left ball contacted")
+
+        if np.linalg.norm(self.r_handle_in_palm) > 0.2 or np.linalg.norm(self.l_handle_in_palm) > 0.2:  
+            self.state = GraspState.REACHING
+
+        elif not self.is_contact_finger: # loose contact or close to the handle
             self.state = GraspState.GRASPING
         else:
             self.state = GraspState.GRASPED
@@ -139,21 +137,28 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         ])
 
     def get_reward(self, action):
-        # TODO: need dual arm version!
         reward = 0
-        if self.state == GraspState.LR_REACHING:
-            reward = -0.1 * min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5)  # encourage palm be close to handle
+        if self.state == GraspState.REACHING:
+            reward = -0.1 * (min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5)
+                            + min(np.linalg.norm(self.l_palm_pose.p - self.l_handle_pose.p), 0.5))  # encourage palm be close to handle
             if self.progress < 0:
                 reward += 0.5 * self.progress
+        
         elif self.state == GraspState.GRASPING:
             reward += 0.2 * (int(self.is_contact_finger))
-            reward -= 0.1 * (int(self.is_arm_contact))
+            reward += 0.1 * (int(self.ball_object_contact))
+            reward -= 0.1 * (int(self.l_is_arm_contact))
+            reward -= 0.1 * (int(self.r_is_arm_contact))
             if self.progress < 0:
                 reward += 0.5 * self.progress
+
         elif self.state == GraspState.GRASPED:
             reward += 0.2 * (int(self.is_contact_finger))
-            reward -= 0.1 * (int(self.is_arm_contact))
+            reward += 0.1 * (int(self.ball_object_contact))
+            reward -= 0.1 * (int(self.l_is_arm_contact))
+            reward -= 0.1 * (int(self.r_is_arm_contact))
             reward += 1.0 * self.progress
+            
         if self.early_done:
             reward += (self.horizon - self.current_step) * 1.2 * self.progress
         action_penalty = np.sum(np.clip(self.robot.get_qvel(), -1, 1) ** 2) * 0.01

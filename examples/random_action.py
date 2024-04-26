@@ -9,7 +9,7 @@ from dexart.env.create_env import create_env
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task_name', type=str, default='faucet')
+    parser.add_argument('--task_name', type=str, default='laptop')
     args = parser.parse_args()
     task_name = args.task_name
 

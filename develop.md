@@ -45,11 +45,11 @@ conda install tensorboard==2.10.0
 - start train the policy
 
 ```
-python examples/train.py --pretrain_path log/pn_100.pth
+python examples/train.py --pretrain_path log/pn_100.pth --freeze
 ```
 - visuallize trained policy
 ```
-python examples/visualize_policy.py --task_name laptop --checkpoint_path ./examples/model_100.zip
+python examples/visualize_policy.py --task_name laptop --checkpoint_path ./examples/model_300.zip
 ```
 
 # YG
