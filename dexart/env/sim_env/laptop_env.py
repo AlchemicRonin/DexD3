@@ -149,50 +149,106 @@ class LaptopEnv(BaseSimulationEnv):
                 self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("r_handle"))
                 self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("l_handle"))
         pos = self.pos  # can add noise here to randomize loaded position
-        orn = transforms3d.euler.euler2quat(0, 0, 0)
+        orn = self.orn
         self.instance.set_root_pose(sapien.Pose(pos, orn))
         self.instance.set_qpos([self.joint_limits_dict[str(self.index)]['left'] + self.init_open_rad])
 
-    def update_handle_relative_pose(self, handle_name = "r_handle"):
-        vertices_relative_pose_list = list()
+    def update_handle_relative_pose(self, handle_name = None):
         vertices_global_pose_list = list()
         
         assert handle_name in ["r_handle", "l_handle"], "handle_name should be either 'r_handle' or 'l_handle'"
         handle = getattr(self, handle_name)
-        
-        for collision_mesh in handle.get_collision_shapes():
-            vertices = collision_mesh.geometry.vertices
-            for vertex in vertices:
-                vertex_relative_pose = sapien.Pose(vertex * collision_mesh.geometry.scale).transform(
-                    collision_mesh.get_local_pose())
-                vertices_relative_pose_list.append(vertex_relative_pose)
-                vertices_global_pose_list.append(handle.get_pose().transform(vertex_relative_pose))
 
-        z_max = -1e9
-        max_z_index = 0
-        sum_pos = np.zeros(3)
-        for i, vertex_global_pose in enumerate(vertices_global_pose_list):
-            sum_pos += vertex_global_pose.p
-            z = vertex_global_pose.p[2]
-            if z > z_max:
-                z_max = z
-                max_z_index = i
-        mean_pos = sum_pos / len(vertices_global_pose_list)
+        if handle_name == "r_handle":
+            for collision_mesh in handle.get_collision_shapes():
+                vertices = collision_mesh.geometry.vertices
+                for vertex in vertices:
+                    vertex_relative_pose = sapien.Pose(vertex * collision_mesh.geometry.scale).transform(
+                        collision_mesh.get_local_pose())
+                    vertices_global_pose_list.append(handle.get_pose().transform(vertex_relative_pose))
 
-        # for x and z, we use the corresponding value of the highest vertex
-        # for y, we use the mean of all the vertices
-        x = vertices_global_pose_list[max_z_index].p[0]
-        z = z_max
-        y = mean_pos[1]
+            z_min = 1e9
+            x_max = -1e9
+            x_min = 1e9
+            min_z_index = 0
+            sum_pos = np.zeros(3)
+            for i, vertex_global_pose in enumerate(vertices_global_pose_list):
+                sum_pos += vertex_global_pose.p
+                z = vertex_global_pose.p[2]
+                x = vertex_global_pose.p[0]
+                if z < z_min:
+                    z_min = z
+                    min_z_index = i
+                if x < x_min:
+                    x_min = x
+                if x > x_max:
+                    x_max = x
 
-        handle_global_pose = sapien.Pose(np.array([x, y, z]))
-        link_global_pose = handle.get_pose()
+            # for x and z, we use the corresponding value of the highest vertex
+            # for y, we use the mean of all the vertices
+            # x = vertices_global_pose_list[max_z_index].p[0]
+            # z = z_max
+            # y = mean_pos[1]
+            x = (x_max + x_min) / 2
+            z = z_min
+            y = vertices_global_pose_list[min_z_index].p[1]
 
-        relative_pose = link_global_pose.inv().transform(handle_global_pose)
+            handle_global_pose = sapien.Pose(np.array([x, y, z]))
+            relative_pose = handle.get_pose().inv().transform(handle_global_pose)
+        elif handle_name == "l_handle":
+            for collision_mesh in handle.get_collision_shapes():
+                vertices = collision_mesh.geometry.vertices
+                for vertex in vertices:
+                    vertex_relative_pose = sapien.Pose(vertex * collision_mesh.geometry.scale).transform(
+                        collision_mesh.get_local_pose())
+                    vertices_global_pose_list.append(handle.get_pose().transform(vertex_relative_pose))
 
+            z_max = -1e9
+            # x_max = -1e9
+            x_min = 1e9
+            max_z_index = -1
+            sum_pos = np.zeros(3)
+            for i, vertex_global_pose in enumerate(vertices_global_pose_list):
+                # builder: sapien.ActorBuilder = self.scene.create_actor_builder()
+                # builder.add_sphere_visual(radius=0.01, color=[0, 1, 0])
+                # point: sapien.Actor = builder.build()
+                # point.set_pose(vertex_global_pose)
+                sum_pos += vertex_global_pose.p
+                z = vertex_global_pose.p[2]
+                x = vertex_global_pose.p[0]
+                if z > z_max:
+                    z_max = z
+                    max_z_index = i
+                if x < x_min:
+                    x_min = x
+                # if x > x_max:
+                #     x_max = x
+
+            # for x and z, we use the corresponding value of the highest vertex
+            # for y, we use the mean of all the vertices
+            # x = vertices_global_pose_list[max_z_index].p[0]
+            # z = z_max
+            # y = mean_pos[1]
+            x = x_min + 0.05
+            z = z_max - 0.05
+            y = vertices_global_pose_list[max_z_index].p[1]
+
+            handle_global_pose = sapien.Pose(np.array([x, y, z]))
+            relative_pose = handle.get_pose().inv().transform(handle_global_pose)
         return {handle_name: relative_pose}
 
     def get_handle_global_pose(self):
         r_better_global_pose = self.r_handle.get_pose().transform(self.handle2link_relative_pose_dict[self.index]["r_handle"])
         l_better_global_pose = self.l_handle.get_pose().transform(self.handle2link_relative_pose_dict[self.index]["l_handle"])
+
+        # builder: sapien.ActorBuilder = self.scene.create_actor_builder()
+        # builder.add_sphere_visual(radius=0.01, color=[0, 0, 1])
+        # right_point: sapien.Actor = builder.build()
+        # right_point.set_pose(r_better_global_pose)
+
+        # builder: sapien.ActorBuilder = self.scene.create_actor_builder()
+        # builder.add_sphere_visual(radius=0.01, color=[1, 0, 0])
+        # left_point: sapien.Actor = builder.build()
+        # left_point.set_pose(l_better_global_pose)
+
         return r_better_global_pose, l_better_global_pose
