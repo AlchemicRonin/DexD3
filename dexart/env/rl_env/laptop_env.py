@@ -169,6 +169,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         reward -= 0.01 * (action_penalty + controller_penalty)
         return reward
     
+    @DeprecationWarning
     def simple_reset(self):
         self.robot.set_pose(self.robot_init_pose)
         self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle'])
@@ -186,6 +187,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
             self.flush_imagination_config()
 
         if self.robot_annotation.__contains__(str(self.index)):
+            # TODO: change initial position of all task rl env
             self.instance_init_pos = np.array([0,0,0.1])
             # self.instance_init_pos = np.array(self.robot_annotation[str(self.index)]) + self.robot.get_pose().p + np.array([0,0,1])
             # self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle']/2)
