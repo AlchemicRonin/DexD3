@@ -51,7 +51,7 @@ class BucketRLEnv(BucketEnv, BaseRLEnv):
         # ============== will not change during training and randomize instance ==============
         self.robot_name = robot_name
         self.setup(robot_name)
-        self.robot_init_pose = sapien.Pose(np.array([-0.8, 0, -1]), transforms3d.euler.euler2quat(0, 0, 0))
+        self.robot_init_pose = sapien.Pose(np.array([-0.9, 0, -1.2]), transforms3d.euler.euler2quat(0, 0, 0))
         self.robot.set_pose(self.robot_init_pose)
         self.configure_robot_contact_reward()
         self.robot_annotation = self.setup_robot_annotation(robot_name)

@@ -37,7 +37,8 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.setup(robot_name)
         # self.robot_init_pose_l = sapien.Pose(np.array([-0.5, -0.3, 0]), transforms3d.euler.euler2quat(0, 0, 0))
         # self.robot_l.set_pose(self.robot_init_pose_l)
-
+        
+        # TODO: keep robot position the same for all env
         self.robot_init_pose = sapien.Pose(np.array([-0.9, 0, -1.2]), transforms3d.euler.euler2quat(0, 0, 0))
         self.robot.set_pose(self.robot_init_pose)
 
@@ -185,8 +186,8 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
             self.flush_imagination_config()
 
         if self.robot_annotation.__contains__(str(self.index)):
-            # self.instance_init_pos = np.array([0,0,0.05])
-            self.instance_init_pos = np.array(self.robot_annotation[str(self.index)]) + self.robot.get_pose().p + np.array([0,0,1])
+            self.instance_init_pos = np.array([0,0,0.1])
+            # self.instance_init_pos = np.array(self.robot_annotation[str(self.index)]) + self.robot.get_pose().p + np.array([0,0,1])
             # self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle']/2)
         else:
             self.instance_init_pos = self.pos

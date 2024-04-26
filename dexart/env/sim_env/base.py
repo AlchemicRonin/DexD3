@@ -202,7 +202,7 @@ class BaseSimulationEnv(object):
         viewer.window.set_camera_parameters(near=0.05, far=100, fovy=1)
         return viewer
 
-    def create_table(self, table_height=1.0, table_half_size=(0.8, 0.8, 0.025)):
+    def create_table(self, table_height=1.2, table_half_size=(0.65, 0.65, 0.025)):
         builder = self.scene.create_actor_builder()
 
         # Top

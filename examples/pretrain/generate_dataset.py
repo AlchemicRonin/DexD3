@@ -25,6 +25,7 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
                      rand_pos=RANDOM_CONFIG[task_name]['rand_pos'],
                      rand_degree=RANDOM_CONFIG[task_name]['rand_degree'],
                      
+                     # fix root of instance capture a static pitcure
                      fix_root_link=True
                      )
     obs = env.reset()
@@ -51,12 +52,13 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
         qpos = np.random.uniform(qlimits[:, 0], qlimits[:, 1])
         env.instance.set_qpos(qpos)
 
-        pos = env.instance_init_pos + np.random.random(3) * RANDOM_CONFIG[task_name]['rand_pos']  # can add noise here to randomize loaded position
+        # add random position for large variance of pretrain data
         random_orn = (np.random.rand() * 2 - 1) * RANDOM_CONFIG[task_name]['rand_degree'] / 180 * np.pi
         if task_name == 'laptop':
+            pos = env.instance_init_pos + np.random.random(3) * RANDOM_CONFIG[task_name]['rand_pos'] * np.array([2,2,0]) # bucket need height variance 
             orn = transforms3d.euler.euler2quat(0, 0, random_orn)
-        if task_name == 'bucket':
-            pos = pos* np.array([1,1,10]) # bucket need height variance 
+        elif task_name == 'bucket':
+            pos = env.instance_init_pos + np.random.random(3) * RANDOM_CONFIG[task_name]['rand_pos'] * np.array([2,2,8]) # bucket need height variance
             orn = transforms3d.euler.euler2quat(0, 0, np.pi + random_orn)
         env.instance.set_root_pose(sapien.Pose(pos, orn))
 

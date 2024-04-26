@@ -40,7 +40,7 @@ class BucketEnv(BaseSimulationEnv):
 
         self.friction = friction
         # load table
-        self.table = self.create_table(table_height=1, table_half_size=[0.65, 0.65, 0.025])
+        self.table = self.create_table()
         self.create_room()
         # default pos and orn, will be used in reset_env
         self.pos = np.array([0, 0, 0.1])
