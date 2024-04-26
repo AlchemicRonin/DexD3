@@ -199,12 +199,12 @@ class BucketRLEnv(BucketEnv, BaseRLEnv):
 
         if self.robot_annotation.__contains__(str(self.index)):
             #self.instance_init_pos = np.array(self.robot_annotation[str(self.index)]) + self.robot.get_pose().p + np.array([0,0,1])
-            self.instance_init_pos = np.array([0,0,0.2])
+            self.instance_init_pos = np.array([-0.1,0,0.2])
         else:
             raise NotImplementedError("double check, when will this be invoked?")
             self.instance_init_pos = self.pos 
         self.pos = self.instance_init_pos
-        pos = self.pos + np.random.random(3) * np.array([1,1,10]) * self.rand_pos  # can add noise here to randomize loaded position
+        pos = self.pos + np.random.random(3) * self.rand_pos  # can add noise here to randomize loaded position
         random_orn = (np.random.rand() * 2 - 1) * self.rand_orn
         orn = transforms3d.euler.euler2quat(0, 0, np.pi + random_orn)
         self.instance.set_root_pose(sapien.Pose(pos, orn))
