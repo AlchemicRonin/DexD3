@@ -32,6 +32,24 @@
 
 
 # ZJW
+- to use tensorboard, first downgrade numpy to 1.21
+```
+conda uninstall numpy
 
+conda install numpy==1.21
+```
+- then install tensorboard
+```
+conda install tensorboard==2.10.0
+```
+- start train the policy
+
+```
+python examples/train.py --pretrain_path log/pn_100.pth --freeze
+```
+- visuallize trained policy
+```
+python examples/visualize_policy.py --task_name laptop --checkpoint_path ./examples/model_300.zip
+```
 
 # YG

@@ -171,7 +171,7 @@ CAMERA_CONFIG = {
             pose=sapien.Pose(
                 # p=np.array([0.5, 1, 0.5]),
                 # q=transforms3d.euler.euler2quat(np.pi/2 , np.pi, -np.pi/4),
-                p=np.array([-0.55, 0, 1.2]),
+                p=np.array([-0.55, 0, 1.0]),
                 q=transforms3d.euler.euler2quat(-np.pi*5/6 , 0, -np.pi/2),
             ),
             fov=np.deg2rad(90),

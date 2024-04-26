@@ -91,6 +91,7 @@ if __name__ == '__main__':
 
 
     env = SubprocVecEnv([create_env_fn] * args.workers, "spawn")  # train on a list of envs.
+    # env = create_env_fn()
 
     model = PPO("PointCloudPolicy", env, verbose=1,
                 n_epochs=args.ep,
@@ -103,6 +104,7 @@ if __name__ == '__main__':
                 max_lr=args.lr,
                 adaptive_kl=0.02,
                 target_kl=0.2,
+                tensorboard_log=os.path.join(BASE_DIR, "logs"),
                 )
 
     if pretrain_path is not None:

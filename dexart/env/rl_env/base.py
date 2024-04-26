@@ -707,7 +707,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                         if "additional_process_fn" in camera_cfg["point_cloud"]:
                             for fn in camera_cfg["point_cloud"]["additional_process_fn"]:
                                 obs = fn(obs, self.np_random)
-                        obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 4))
+                        obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 8))
                     elif modality == "segmentation":
                         obs = output_array[..., :2].astype(np.uint8)
                     else:
@@ -759,7 +759,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                                               shape=(cam_cfg[modality_name]["num_points"],) + (3,))
                         obs_dict[f"{cam_name}-seg_gt"] = gym.spaces.Box(low=-np.inf, high=np.inf,
                                                                         shape=(cam_cfg[modality_name]["num_points"],)
-                                                                              + (4,))
+                                                                              + (8,)) # 8 is the number of newly segmentation masks
                     elif modality_name == "segmentation":
                         spec = gym.spaces.Box(low=0, high=255, shape=resolution + (2,), dtype=np.uint8)
                     else:
@@ -772,11 +772,10 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                 self.update_imagination(reset_goal=True)
                 for img_name, points in self.imaginations.items():
                     num_points = points.shape[0]
-                    obs_dict[img_name] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(num_points, 7))
+                    obs_dict[img_name] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(num_points, 11))
                     if self.use_history_obs:
                         obs_dict['previous-' + img_name] = gym.spaces.Box(low=-np.inf, high=np.inf,
-                                                                          shape=(num_points, 7))
-
+                                                                          shape=(num_points, 11))
             return gym.spaces.Dict(obs_dict)
 
 
