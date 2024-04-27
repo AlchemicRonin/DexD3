@@ -238,7 +238,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.robot.set_drive_velocity_target(target_q_vel)
 
         for i in range(self.frame_skip):
-            self.robot.set_qf(self.robot.compute_passive_force(external=False, coriolis_and_centrifugal=False))
+            self.robot.set_qf(self.robot.compute_passive_force(external=True, coriolis_and_centrifugal=True))
             self.scene.step()
         self.current_step += 1
 
@@ -315,8 +315,10 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         # configure palm
         self.r_palm_link_name = info.palm_name
         self.l_palm_link_name = 'l_hand'
+        
         self.r_palm_link = [link for link in self.robot.get_links() if link.get_name() == 'base_link'][0]
         self.l_palm_link = [link for link in self.robot.get_links() if link.get_name() == 'l_hand'][0]
+        self.l_ball_link = [link for link in self.robot.get_links() if link.get_name() == 'l_palm'][0]
 
         # configure fingers
         finger_tip_names = ["link_15.0_tip", "link_3.0_tip", "link_7.0_tip", "link_11.0_tip"]

@@ -51,7 +51,7 @@ class LaptopEnv(BaseSimulationEnv):
         self.handle2link_relative_pose_dict = dict()
         self.setup_instance_annotation()
         # for laptop env
-        self.init_open_rad = 0.2
+        self.init_open_rad = 0.4
 
         if not self.change_instance_when_reset:
             self.index = self.instance_list[index]
