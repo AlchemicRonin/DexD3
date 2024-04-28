@@ -50,8 +50,6 @@ class PotRLEnv(PotEnv, BaseRLEnv):
         self.reset()
 
     def update_cached_state(self):
-        # pass
-        
         # # right side (with allegro hand)
         # ## finger
         # for i, link in enumerate(self.finger_tip_links):
