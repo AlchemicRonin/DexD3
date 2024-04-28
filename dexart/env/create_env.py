@@ -6,6 +6,7 @@ from dexart.env.rl_env.faucet_env import FaucetRLEnv
 from dexart.env.rl_env.bucket_env import BucketRLEnv
 from dexart.env.rl_env.laptop_env import LaptopRLEnv
 from dexart.env.rl_env.toilet_env import ToiletRLEnv
+from dexart.env.rl_env.pot_env import PotRLEnv
 from dexart.env import task_setting
 from dexart.env.sim_env.constructor import add_default_scene_light
 
@@ -40,6 +41,8 @@ def create_env(task_name, use_visual_obs, use_gui=False, is_eval=False, pc_seg=F
         env = LaptopRLEnv(**env_params, friction=5)
     elif task_name == 'toilet':
         env = ToiletRLEnv(**env_params, friction=5)
+    elif task_name == 'pot':
+        env = PotRLEnv(**env_params, friction=5)
     else:
         raise NotImplementedError
     if use_visual_obs:

@@ -11,9 +11,11 @@ BOUND_CONFIG = {
     # "bucket": [0.1, 2.0, -2.0, 2.0, -0.29, 0.4],
     "bucket": [-0.5, 1.4, -1.0, 1, -0.2, 3],
     "laptop": [-0.5, 1.4, -1.0, 1, -0.2, 3],
+    "pot": [-0.5, 1.4, -1.0, 1, -0.2, 3],
     "toilet": [0.1, 2.0, -2.0, 2, -0.3, 0.8],
 }
 
+# ??? where is this used?
 ROBUSTNESS_INIT_CAMERA_CONFIG = {
     "laptop": {
         "r": 1,
@@ -125,6 +127,10 @@ TRAIN_CONFIG = {
     "usb":{
         'seen': [100061, 100071, 100072, 100073, 100079, 100085, ],
         'unseen': [100087, 100095, 100103, 100108, 100113],
+    },
+    "pot":{
+        'seen': [100015, 100017 ],
+        'unseen': [100021],
     }
 }
 
@@ -168,6 +174,18 @@ CAMERA_CONFIG = {
         ),
     },
     "laptop": {
+        "instance_1": dict(
+            pose=sapien.Pose(
+                # p=np.array([0.5, 1, 0.5]),
+                # q=transforms3d.euler.euler2quat(np.pi/2 , np.pi, -np.pi/4),
+                p=np.array([-0.6, 0, 1]),
+                q=transforms3d.euler.euler2quat(-np.pi*6/7 , 0, -np.pi/2),
+            ),
+            fov=np.deg2rad(80),
+            resolution=(64, 64),
+        ),
+    },
+    "pot": {
         "instance_1": dict(
             pose=sapien.Pose(
                 # p=np.array([0.5, 1, 0.5]),
@@ -302,7 +320,8 @@ IMG_CONFIG = {
 
 RANDOM_CONFIG = {
     "bucket": {"rand_pos": 0.05, "rand_degree": 30},
-    "laptop": {"rand_pos": 0.1, "rand_degree": 10},
+    "pot": {"rand_pos": 0.05, "rand_degree": 0},
+    "laptop": {"rand_pos": 0.1, "rand_degree": 5},
     "faucet": {"rand_pos": 0.1, "rand_degree": 90},
     "toilet": {"rand_pos": 0.2, "rand_degree": 45},
 }

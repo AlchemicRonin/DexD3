@@ -9,7 +9,7 @@ from sapien.utils import Viewer
 
 if __name__ == "__main__":
     # env = LaptopRLEnv(use_gui=True, robot_name='atlas')
-    env = PotRLEnv(use_gui=True, robot_name="atlas")
+    env = PotRLEnv(use_gui=True, robot_name="atlas",index=1)
 
     # robot_dof = env.robot.dof
     # viewer = env.create_viewer()
