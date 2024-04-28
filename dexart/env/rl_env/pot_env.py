@@ -12,7 +12,7 @@ import transforms3d
 from dexart.env.rl_env.base import BaseRLEnv
 from dexart.env.rl_env.bibase import BaseBimanualRLEnv
 from dexart.env.sim_env.constructor import add_default_scene_light
-from dexart.env.sim_env.laptop_env import LaptopEnv
+from dexart.env.sim_env.pot_env import PotEnv
 from dexart.env import task_setting
 
 
@@ -21,7 +21,7 @@ class GraspState(Enum):
     GRASPING = 2
     GRASPED = 3
 
-class LaptopRLEnv(LaptopEnv, BaseRLEnv):
+class PotRLEnv(PotEnv, BaseRLEnv):
     def __init__(self, use_gui=False, frame_skip=5, robot_name="atlas", friction=5, index=0, rand_pos=0.0,
                  rand_orn=0.0, **renderer_kwargs):
         super().__init__(use_gui, frame_skip, friction=friction, index=index, **renderer_kwargs)
@@ -50,18 +50,20 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.reset()
 
     def update_cached_state(self):
-        # right side (with allegro hand)
-        ## finger
-        for i, link in enumerate(self.finger_tip_links):
-            self.finger_tip_pos[i] = self.finger_tip_links[i].get_pose().p
-        r_check_contact_links = self.finger_contact_links + [self.r_palm_link]
-        finger_contact_boolean = self.check_actor_pair_contacts(r_check_contact_links, self.r_handle)
-        # NOTE: change the name (in BaseRLEnv): self.robot_object_contact -> self.finger_object_contact
-        self.finger_object_contact[:] = np.clip(np.bincount(self.finger_contact_ids, weights=finger_contact_boolean), 0, 1)
-        # any one finger or palm is contacting
-        self.loosen_contact_finger = np.sum(self.finger_object_contact[:-1]) >= 1 or self.finger_object_contact[-1]
-        # two fingers and palm is contacting
-        self.is_contact_finger = np.sum(self.finger_object_contact[:-1]) >= 2 and self.finger_object_contact[-1]
+        # pass
+        
+        # # right side (with allegro hand)
+        # ## finger
+        # for i, link in enumerate(self.finger_tip_links):
+        #     self.finger_tip_pos[i] = self.finger_tip_links[i].get_pose().p
+        # r_check_contact_links = self.finger_contact_links + [self.r_palm_link]
+        # finger_contact_boolean = self.check_actor_pair_contacts(r_check_contact_links, self.body)
+        # # NOTE: change the name (in BaseRLEnv): self.robot_object_contact -> self.finger_object_contact
+        # self.finger_object_contact[:] = np.clip(np.bincount(self.finger_contact_ids, weights=finger_contact_boolean), 0, 1)
+        # # any one finger or palm is contacting
+        # self.loosen_contact_finger = np.sum(self.finger_object_contact[:-1]) >= 1 or self.finger_object_contact[-1]
+        # # two fingers and palm is contacting
+        # self.is_contact_finger = np.sum(self.finger_object_contact[:-1]) >= 2 and self.finger_object_contact[-1]
         
         ## palm
         self.r_palm_pose = self.r_palm_link.get_pose()
@@ -71,9 +73,9 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.r_palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
 
         # left side (with ball)
-        l_check_contact_links = [self.l_palm_link]
-        ball_contact_boolean = self.check_actor_pair_contacts(l_check_contact_links, self.l_handle)
-        self.ball_object_contact = np.clip(ball_contact_boolean, 0,1) # the clip is not necessary
+        # l_check_contact_links = [self.l_palm_link]
+        # ball_contact_boolean = self.check_actor_pair_contacts(l_check_contact_links, self.body)
+        # self.ball_object_contact = np.clip(ball_contact_boolean, 0,1) # the clip is not necessary
         
         # palm 
         self.l_palm_pose = self.l_ball_link.get_pose() # use the virtual ball pose as the global pose of l_palm 
@@ -83,53 +85,53 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.l_palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
 
 
-        # arm contact
-        arm_contact_boolean = self.check_actors_pair_contacts(self.arm_contact_links, self.instance_links)
-        l_arm_contact_boolean = self.check_actors_pair_contacts(self.l_arm_contact_links, self.instance_links)
-        r_arm_contact_boolean = self.check_actors_pair_contacts(self.r_arm_contact_links, self.instance_links)
+        # # arm contact
+        # arm_contact_boolean = self.check_actors_pair_contacts(self.arm_contact_links, self.instance_links)
+        # l_arm_contact_boolean = self.check_actors_pair_contacts(self.l_arm_contact_links, self.instance_links)
+        # r_arm_contact_boolean = self.check_actors_pair_contacts(self.r_arm_contact_links, self.instance_links)
         
-        self.is_arm_contact = np.sum(arm_contact_boolean)
-        self.l_is_arm_contact = np.sum(l_arm_contact_boolean)
-        self.r_is_arm_contact = np.sum(r_arm_contact_boolean)
+        # self.is_arm_contact = np.sum(arm_contact_boolean)
+        # self.l_is_arm_contact = np.sum(l_arm_contact_boolean)
+        # self.r_is_arm_contact = np.sum(r_arm_contact_boolean)
         
         self.robot_qpos_vec = self.robot.get_qpos()
 
-        # object state
-        self.height = self.instance.get_pose().p[2]
-        openness = abs(self.instance.get_qpos()[0] - self.joint_limits_dict[str(self.index)]['middle'])
-        total = abs(self.joint_limits_dict[str(self.index)]['left'] - self.joint_limits_dict[str(self.index)]['middle']) - self.init_open_rad
-        self.progress = 1 - openness / total
+        # # object state
+        # self.height = self.instance.get_pose().p[2]
+        # openness = abs(self.instance.get_qpos()[0] - self.joint_limits_dict[str(self.index)]['middle'])
+        # total = abs(self.joint_limits_dict[str(self.index)]['left'] - self.joint_limits_dict[str(self.index)]['middle']) - self.init_open_rad
+        # self.progress = 1 - openness / total
         self.r_handle_pose, self.l_handle_pose = self.get_handle_global_pose()
 
-        # print("r_handle_pose:", self.r_handle_pose.p, "l_handle_pose:", self.l_handle_pose.p)
+        # # print("r_handle_pose:", self.r_handle_pose.p, "l_handle_pose:", self.l_handle_pose.p)
 
-        self.r_handle_in_palm = self.r_handle_pose.p - self.r_palm_pose.p
-        self.l_handle_in_palm = self.l_handle_pose.p - self.l_palm_pose.p
+        # self.r_handle_in_palm = self.r_handle_pose.p - self.r_palm_pose.p
+        # self.l_handle_in_palm = self.l_handle_pose.p - self.l_palm_pose.p
 
         
-        # box = self.actor_builder.build(name="box")
-        # pose = sapien.Pose(self.l_palm_pose.p)
-        # box.set_pose(pose)
-        if np.linalg.norm(self.r_handle_pose.p - self.l_palm_pose.p) < 0.10:
-            print("left plam touch right handle")
-        if np.linalg.norm(self.l_handle_pose.p - self.l_palm_pose.p) < 0.10:
-            print("left plam touch left handle")
-        # if np.sum(self.finger_object_contact) > 0:
-        #     print("right finger contacted")
-        # if self.ball_object_contact > 0:
-        #     print("left ball contacted")
+        # # box = self.actor_builder.build(name="box")
+        # # pose = sapien.Pose(self.l_palm_pose.p)
+        # # box.set_pose(pose)
+        # if np.linalg.norm(self.r_handle_pose.p - self.l_palm_pose.p) < 0.10:
+        #     print("left plam touch right handle")
+        # if np.linalg.norm(self.l_handle_pose.p - self.l_palm_pose.p) < 0.10:
+        #     print("left plam touch left handle")
+        # # if np.sum(self.finger_object_contact) > 0:
+        # #     print("right finger contacted")
+        # # if self.ball_object_contact > 0:
+        # #     print("left ball contacted")
 
-        if np.linalg.norm(self.r_handle_in_palm) > 0.1 or np.linalg.norm(self.l_handle_in_palm) > 0.1:  
-            self.state = GraspState.REACHING
+        # if np.linalg.norm(self.r_handle_in_palm) > 0.1 or np.linalg.norm(self.l_handle_in_palm) > 0.1:  
+        #     self.state = GraspState.REACHING
 
-        elif not self.is_contact_finger: # loose contact or close to the handle
-            self.state = GraspState.GRASPING
-        else:
-            self.state = GraspState.GRASPED
-        self.early_done = (self.progress > 0.95) and (self.state == 3)
-        self.is_eval_done = (self.progress > 0.95) and (self.state == 3)
+        # elif not self.is_contact_finger: # loose contact or close to the handle
+        #     self.state = GraspState.GRASPING
+        # else:
+        #     self.state = GraspState.GRASPED
+        # self.early_done = (self.progress > 0.95) and (self.state == 3)
+        # self.is_eval_done = (self.progress > 0.95) and (self.state == 3)
 
-        # print("state:", self.state, "progress:", self.progress, "is_eval_done:", self.is_eval_done, "early_done:", self.early_done)
+        # # print("state:", self.state, "progress:", self.progress, "is_eval_done:", self.is_eval_done, "early_done:", self.early_done)
 
     def get_oracle_state(self):
         return self.get_robot_state()
