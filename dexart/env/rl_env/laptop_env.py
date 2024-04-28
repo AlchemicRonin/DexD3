@@ -175,7 +175,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         # if self.early_done:
         #     reward += (self.horizon - self.current_step) * 1.2 * self.progress
         action_penalty = np.sum(np.clip(self.robot.get_qvel(), -1, 1) ** 2) * 0.01
-        controller_penalty = (self.r_cartesian_error ** 2) * 1e3
+        controller_penalty = (self.l_cartesian_error ** 2) * 1e3
         reward -= 0.01 * (action_penalty + controller_penalty)
         return reward
     

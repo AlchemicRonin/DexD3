@@ -49,6 +49,12 @@ def scatter_3d(x,y,z,c):
 # generate_data.py --> gen_single_data
 scatter_3d(observed_pc[:,0], observed_pc[:,1], observed_pc[:,2], np.argmax(observed_pc[:,3:],axis=-1))
 
+# train_seg --> train
+i=0
+idx = (labels[i].cpu() == 1)
+scatter_3d(points[i,idx,0].cpu(),points[i,idx,1].cpu(),points[i,idx,2].cpu(), labels[i,idx].cpu())
+
+
 scatter_3d(obs['instance_1-point_cloud'][:,0],
 obs['instance_1-point_cloud'][:,1],
 obs['instance_1-point_cloud'][:,2],
