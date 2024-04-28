@@ -36,7 +36,9 @@ def scatter_3d(x,y,z,c):
     # c: 颜色  可为单个，可为序列
     # depthshade: 是否为散点标记着色以呈现深度外观。对 scatter() 的每次调用都将独立执行其深度着色。
     # marker：样式
-    ax.scatter(xs=x, ys=y, zs=z, zdir='z', s=30, c=c ,cmap='tab20', depthshade=True)
+    ax.scatter(xs=x, ys=y, zs=z, zdir='z', s=30, 
+               c=c ,cmap='tab20', 
+               depthshade=True)
     
     ax.set_zlabel('Z', fontdict={'size': 15, 'color': 'red'})
     ax.set_ylabel('Y', fontdict={'size': 15, 'color': 'red'})
@@ -45,6 +47,8 @@ def scatter_3d(x,y,z,c):
     plt.show()
 
 # generate_data.py --> gen_single_data
+scatter_3d(observed_pc[:,0], observed_pc[:,1], observed_pc[:,2], np.argmax(observed_pc[:,3:],axis=-1))
+
 scatter_3d(obs['instance_1-point_cloud'][:,0],
 obs['instance_1-point_cloud'][:,1],
 obs['instance_1-point_cloud'][:,2],

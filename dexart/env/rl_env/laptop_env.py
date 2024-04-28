@@ -110,10 +110,10 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         # box = self.actor_builder.build(name="box")
         # pose = sapien.Pose(self.l_palm_pose.p)
         # box.set_pose(pose)
-        if np.linalg.norm(self.r_handle_pose.p - self.l_palm_pose.p) < 0.10:
-            print("left plam touch right handle")
-        if np.linalg.norm(self.l_handle_pose.p - self.l_palm_pose.p) < 0.10:
-            print("left plam touch left handle")
+        # if np.linalg.norm(self.r_handle_pose.p - self.l_palm_pose.p) < 0.10:
+        #     print("left plam touch right handle")
+        # if np.linalg.norm(self.l_handle_pose.p - self.l_palm_pose.p) < 0.10:
+        #     print("left plam touch left handle")
         # if np.sum(self.finger_object_contact) > 0:
         #     print("right finger contacted")
         # if self.ball_object_contact > 0:
@@ -152,10 +152,10 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
     def get_reward(self, action):
         reward = 0
         # if self.state == GraspState.REACHING:
-        reward = -0.1 * (min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5)
-                        + min(np.linalg.norm(self.l_palm_pose.p - self.l_handle_pose.p), 0.5))  # encourage palm be close to handle
-        if self.progress < 0:
-            reward += 0.5 * self.progress
+        reward = -0.1 * (#min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5) + 
+                         min(np.linalg.norm(self.l_palm_pose.p - self.l_handle_pose.p), 0.5))  # encourage palm be close to handle
+        # if self.progress < 0:
+            # reward += 0.5 * self.progress
         
         # elif self.state == GraspState.GRASPING:
         #     reward += 0.2 * (int(self.is_contact_finger))

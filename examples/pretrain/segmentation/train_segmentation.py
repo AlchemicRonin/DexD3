@@ -44,9 +44,11 @@ class Solver(object):
             raise ValueError('Unknown architecture: {}'.format(config['arch']))
         # self.load('checkpoints/1.pth')
         self.optimizer = optim.Adam(self.model.parameters(), lr=config['lr'])
+        # TODO: add weighted loss for other categories
         if config['cat'] == 'bucket':
             print('Using Weighted CrossEntropy loss')
-            self.criterion = nn.CrossEntropyLoss(weight=torch.tensor([3., 1., 1., 1.]).to(self.device))
+            self.criterion = nn.CrossEntropyLoss(weight=torch.tensor(
+               [5., 20., 1., 1., 1., 1., 1., 1., 1.]).to(self.device))
         else:
             print('Using CrossEntropy loss')
             self.criterion = nn.CrossEntropyLoss()

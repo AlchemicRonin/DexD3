@@ -39,7 +39,7 @@ class BucketRLEnv(BucketEnv, BaseRLEnv):
         # =================================================
         super().__init__(use_gui, frame_skip, friction=friction, index=index, handle_type='left', fix_root_link=fix_root_link,
                          thick_handle=thick_handle, **renderer_kwargs)
-        # ??? what is box?
+        # this box ?
         # self.box = self.create_box(
         #     sapien.Pose(p=np.array([-0.5, 0., 0.15])),
         #     half_size=np.array([0.1, 0.2, 0.15]),
