@@ -48,12 +48,13 @@ class Solver(object):
         if config['cat'] == 'bucket':
             print('Using Weighted CrossEntropy loss')
             self.criterion = nn.CrossEntropyLoss(weight=torch.tensor(
-               [5., 20., 1., 1., 1., 1., 1., 1., 1.]).to(self.device))
+               [2., 10., 1., 1., 1., 1., 1., 1., 1.]).to(self.device))
         else:
             print('Using CrossEntropy loss')
             self.criterion = nn.CrossEntropyLoss()
         
-        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=config['num_epochs']*len(self.train_loader), eta_min=1e-5)
+        # may not be used
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=config['num_epochs']*len(self.train_loader), eta_min=1e-4)
 
         self.writer = SummaryWriter(config['log_dir'])
 
@@ -81,7 +82,8 @@ class Solver(object):
                     loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
-                self.scheduler.step()
+                # scheduler may not help
+                # self.scheduler.step()
 
                 if i % self.config['log_step'] == 0:
                     # print(f"Epoch [{epoch + 1}/{self.config['num_epochs']}], Step [{i + 1}/{len(self.train_loader)}], Loss: {loss.item():.4f}")
