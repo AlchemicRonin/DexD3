@@ -20,6 +20,8 @@ class GraspState(Enum):
     REACHING = 1
     GRASPING = 2
     GRASPED = 3
+    # REACHING = 1
+    # TOUCHING = 2
 
 class LaptopRLEnv(LaptopEnv, BaseRLEnv):
     def __init__(self, use_gui=False, frame_skip=5, robot_name="atlas", friction=5, index=0, rand_pos=0.0,
@@ -116,7 +118,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.progress = 1 - openness / total
         self.r_handle_pose, self.l_handle_pose = self.get_handle_global_pose()
 
-        # print("r_handle_pose:", self.r_handle_pose.p, "l_handle_pose:", self.l_handle_pose.p)
+        self.table_contact_boolean = self.check_actor_pair_contacts(l_check_contact_links, self.table)
 
         self.r_handle_in_palm = self.r_handle_pose.p - self.r_palm_pose.p
         self.l_handle_in_palm = self.l_handle_pose.p - self.l_palm_pose.p
@@ -141,9 +143,12 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
             self.state = GraspState.GRASPING
         else:
             self.state = GraspState.GRASPED
-        self.early_done = (self.progress > 0.95) and (self.state == 3)
+
+        self.target_distance = np.linalg.norm(self.l_handle_in_palm)
+
+        self.early_done = (self.target_distance < 0.1) # and (self.state == 3)
         # self.ealy_done = True if np.sum(ball_contact_boolean) > 0 else False
-        self.is_eval_done = (self.progress > 0.95) and (self.state == 3)
+        self.is_eval_done = (self.target_distance < 0.1) # and (self.state == 3)
 
         # print("state:", self.state, "progress:", self.progress, "is_eval_done:", self.is_eval_done, "early_done:", self.early_done)
 
@@ -175,7 +180,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
 
         reward = 0
         # if self.state == GraspState.REACHING:
-        reward = -1 * (#min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5) + 
+        reward += -1 * (# min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5) + 
                          min(np.linalg.norm(self.l_palm_pose.p - self.l_handle_pose.p), 0.5))  # encourage palm be close to handle
         # if self.progress < 0:
         #     reward += 0.5 * self.progress
@@ -195,10 +200,18 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         #     reward -= 0.1 * (int(self.r_is_arm_contact))
         #     reward += 1.0 * self.progress
             
+        # if self.early_done:
+        #     reward += (self.horizon - self.current_step) * 1.2 * self.progress
+
+        # if self.l_handle_in_palm < 0.1:
         if self.early_done:
-            reward += (self.horizon - self.current_step) * 1.2 * self.progress
+            reward += (self.horizon - self.current_step) * 1.2 * (0.5 - self.progress)
+
+        if self.table_contact_boolean:
+            reward -= 0.5
         action_penalty = np.sum(np.clip(self.robot.get_qvel(), -1, 1) ** 2) * 1e-2
-        controller_penalty = (self.l_cartesian_error ** 2) * 1e2
+        # controller_penalty = (self.l_cartesian_error ** 2) * 1e2
+        controller_penalty = 0
         reward -= 0.01 * (action_penalty + controller_penalty)
         return reward
     
@@ -260,4 +273,4 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
 
     @cached_property
     def horizon(self):
-        return 250
+        return 100

@@ -230,13 +230,13 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         r_arm_qvel = compute_inverse_kinematics(r_target_root_velocity, r_palm_jacobian)[:self.arm_dof]
         r_arm_qvel = np.clip(r_arm_qvel, -np.pi / 1, np.pi / 1)
         r_arm_qpos = r_arm_qvel * self.control_time_step + self.robot.get_qpos()[self.arm_dof:self.arm_dof * 2]
-        # r_arm_qvel = np.zeros(7)
-        # r_arm_qpos = np.zeros(7)
+        r_arm_qvel = np.zeros(7)
+        r_arm_qpos = np.zeros(7)
 
         # print("q_limits", self.robot.get_qlimits())
 
         hand_qpos = recover_action(action[12:], self.robot.get_qlimits()[14:])
-        # hand_qpos = np.zeros(16)
+        hand_qpos = np.zeros(16)
 
         target_q_pos = np.concatenate([l_arm_qpos, r_arm_qpos, hand_qpos])
         target_q_vel = np.zeros_like(target_q_pos)
