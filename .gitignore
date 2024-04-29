@@ -28,5 +28,5 @@ examples/logs/
 
 .vscode/
 data/
-assets.zip
-log/
+log/*
+!log/segmentation
