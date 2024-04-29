@@ -53,7 +53,7 @@ if __name__ == '__main__':
     extractor_name = args.extractor_name
     seed = args.seed if args.seed >= 0 else random.randint(0, 100000)
     pretrain_path = args.pretrain_path
-    horizon = 200
+    horizon = 100
     env_iter = args.iter * horizon * args.n
     print(f"freeze: {args.freeze}")
 

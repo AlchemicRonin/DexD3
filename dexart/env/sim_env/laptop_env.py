@@ -234,31 +234,36 @@ class LaptopEnv(BaseSimulationEnv):
                         handle.get_pose().transform(vertex_relative_pose)
                     )
 
-            z_min = 1e9
-            x_max = -1e9
+            z_max = -1e9
+            y_max = -1e9
+            y_min = 1e9
             x_min = 1e9
             min_z_index = 0
             sum_pos = np.zeros(3)
             for i, vertex_global_pose in enumerate(vertices_global_pose_list):
                 sum_pos += vertex_global_pose.p
                 z = vertex_global_pose.p[2]
+                y = vertex_global_pose.p[1]
                 x = vertex_global_pose.p[0]
-                if z < z_min:
-                    z_min = z
-                    min_z_index = i
+                if z > z_max:
+                    z_max = z
+                    max_z_index = i
+                if y < y_min:
+                    y_min = y
+                if y > y_max:
+                    y_max = y
                 if x < x_min:
                     x_min = x
-                if x > x_max:
-                    x_max = x
 
             # for x and z, we use the corresponding value of the highest vertex
             # for y, we use the mean of all the vertices
             # x = vertices_global_pose_list[max_z_index].p[0]
             # z = z_max
             # y = mean_pos[1]
-            x = (x_max + x_min) / 2
-            z = z_min
-            y = vertices_global_pose_list[min_z_index].p[1]
+            y = (y_max + 2*y_min) / 3
+            z = z_max
+            # x = vertices_global_pose_list[min_z_index].p[0]
+            x = x_min
 
             handle_global_pose = sapien.Pose(np.array([x, y, z]))
             relative_pose = handle.get_pose().inv().transform(handle_global_pose)
@@ -274,6 +279,7 @@ class LaptopEnv(BaseSimulationEnv):
                     )
 
             z_max = -1e9
+            y_max = -1e9
             # x_max = -1e9
             x_min = 1e9
             max_z_index = -1
@@ -284,13 +290,16 @@ class LaptopEnv(BaseSimulationEnv):
                 # point: sapien.Actor = builder.build()
                 # point.set_pose(vertex_global_pose)
                 sum_pos += vertex_global_pose.p
-                z = vertex_global_pose.p[2]
                 x = vertex_global_pose.p[0]
+                y = vertex_global_pose.p[1]
+                z = vertex_global_pose.p[2]
                 if z > z_max:
                     z_max = z
                     max_z_index = i
                 if x < x_min:
                     x_min = x
+                if y > y_max:
+                    y_max = y
                 # if x > x_max:
                 #     x_max = x
 
@@ -299,9 +308,10 @@ class LaptopEnv(BaseSimulationEnv):
             # x = vertices_global_pose_list[max_z_index].p[0]
             # z = z_max
             # y = mean_pos[1]
-            x = x_min + 0.05
-            z = z_max - 0.05
-            y = vertices_global_pose_list[max_z_index].p[1]
+            x = x_min + 0.10
+            z = z_max + 0.02
+            y = y_max - 0.10
+            # y = vertices_global_pose_list[max_z_index].p[1]
 
             handle_global_pose = sapien.Pose(np.array([x, y, z]))
             relative_pose = handle.get_pose().inv().transform(handle_global_pose)

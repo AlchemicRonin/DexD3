@@ -211,23 +211,32 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
 
     def atlas_sim_step(self, action: np.ndarray):
         current_qpos = self.robot.get_qpos()
-        l_ee_link_last_pose = self.l_ee_link.get_pose()
-        r_ee_link_last_pose = self.r_ee_link.get_pose()
         action = np.clip(action, -1, 1)
+        # action = np.zeros_like(action)
+
+
+        l_ee_link_last_pose = self.l_ee_link.get_pose()
         l_target_root_velocity = recover_action(action[:6], self.velocity_limit[:6])
-        r_target_root_velocity = recover_action(action[6:12], self.velocity_limit[:6])
         l_palm_jacobian = self.l_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[:self.arm_dof])
-        r_palm_jacobian = self.r_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[self.arm_dof:self.arm_dof * 2])
         l_arm_qvel = compute_inverse_kinematics(l_target_root_velocity, l_palm_jacobian)[:self.arm_dof]
-        r_arm_qvel = compute_inverse_kinematics(r_target_root_velocity, r_palm_jacobian)[:self.arm_dof]
         l_arm_qvel = np.clip(l_arm_qvel, -np.pi / 1, np.pi / 1)
-        r_arm_qvel = np.clip(r_arm_qvel, -np.pi / 1, np.pi / 1)
         l_arm_qpos = l_arm_qvel * self.control_time_step + self.robot.get_qpos()[:self.arm_dof]
+        # l_arm_qvel = np.zeros(7)
+        # l_arm_qpos = np.zeros(7)
+        
+        r_ee_link_last_pose = self.r_ee_link.get_pose()
+        r_target_root_velocity = recover_action(action[6:12], self.velocity_limit[:6])
+        r_palm_jacobian = self.r_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[self.arm_dof:self.arm_dof * 2])
+        r_arm_qvel = compute_inverse_kinematics(r_target_root_velocity, r_palm_jacobian)[:self.arm_dof]
+        r_arm_qvel = np.clip(r_arm_qvel, -np.pi / 1, np.pi / 1)
         r_arm_qpos = r_arm_qvel * self.control_time_step + self.robot.get_qpos()[self.arm_dof:self.arm_dof * 2]
+        # r_arm_qvel = np.zeros(7)
+        # r_arm_qpos = np.zeros(7)
 
         # print("q_limits", self.robot.get_qlimits())
 
         hand_qpos = recover_action(action[12:], self.robot.get_qlimits()[14:])
+        # hand_qpos = np.zeros(16)
 
         target_q_pos = np.concatenate([l_arm_qpos, r_arm_qpos, hand_qpos])
         target_q_vel = np.zeros_like(target_q_pos)

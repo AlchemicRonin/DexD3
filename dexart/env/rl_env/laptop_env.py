@@ -49,6 +49,21 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         # ============== will change if randomize instance ==============
         self.reset()
 
+
+        # FIXME: ONLY FOR DEBUG
+        if self.use_gui:
+            l_actor_builder = self.scene.create_actor_builder()
+            # l_actor_builder.add_box_collision(half_size=[0.05, 0.05, 0.05])
+            l_actor_builder.add_box_visual(half_size=[0.05, 0.05, 0.05], color=[1., 0., 0.])
+            self.l_handle_pos = l_actor_builder.build(name='l_handle_pos')  # Add a box
+            self.l_plam_pos = l_actor_builder.build(name='l_plam_pos')  # Add a box
+            
+            r_actor_builder = self.scene.create_actor_builder()
+            # r_actor_builder.add_box_collision(half_size=[0.05, 0.05, 0.05])
+            r_actor_builder.add_box_visual(half_size=[0.05, 0.05, 0.05], color=[0., 0., 1.])
+            self.r_handle_pos = r_actor_builder.build(name='r_handle_pos')  # Add a box
+            self.r_plam_pos = r_actor_builder.build(name='r_plam_pos')  # Add a box
+
     def update_cached_state(self):
         # right side (with allegro hand)
         ## finger
@@ -127,6 +142,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         else:
             self.state = GraspState.GRASPED
         self.early_done = (self.progress > 0.95) and (self.state == 3)
+        # self.ealy_done = True if np.sum(ball_contact_boolean) > 0 else False
         self.is_eval_done = (self.progress > 0.95) and (self.state == 3)
 
         # print("state:", self.state, "progress:", self.progress, "is_eval_done:", self.is_eval_done, "early_done:", self.early_done)
@@ -150,13 +166,20 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         ])
 
     def get_reward(self, action):
+        # DEBUG ONLY        
+        if self.use_gui:
+            self.l_handle_pos.set_pose(sapien.Pose(p=self.l_handle_pose.p))
+            self.l_plam_pos.set_pose(sapien.Pose(p=self.l_palm_pose.p))
+            self.r_handle_pos.set_pose(sapien.Pose(p=self.r_handle_pose.p))
+            self.r_plam_pos.set_pose(sapien.Pose(p=self.r_palm_pose.p))
+
         reward = 0
         # if self.state == GraspState.REACHING:
-        reward = -0.1 * (#min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5) + 
+        reward = -1 * (#min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5) + 
                          min(np.linalg.norm(self.l_palm_pose.p - self.l_handle_pose.p), 0.5))  # encourage palm be close to handle
         # if self.progress < 0:
-            # reward += 0.5 * self.progress
-        
+        #     reward += 0.5 * self.progress
+
         # elif self.state == GraspState.GRASPING:
         #     reward += 0.2 * (int(self.is_contact_finger))
         #     reward += 0.1 * (int(self.ball_object_contact))
@@ -172,10 +195,10 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         #     reward -= 0.1 * (int(self.r_is_arm_contact))
         #     reward += 1.0 * self.progress
             
-        # if self.early_done:
-        #     reward += (self.horizon - self.current_step) * 1.2 * self.progress
-        action_penalty = np.sum(np.clip(self.robot.get_qvel(), -1, 1) ** 2) * 0.01
-        controller_penalty = (self.l_cartesian_error ** 2) * 1e3
+        if self.early_done:
+            reward += (self.horizon - self.current_step) * 1.2 * self.progress
+        action_penalty = np.sum(np.clip(self.robot.get_qvel(), -1, 1) ** 2) * 1e-2
+        controller_penalty = (self.l_cartesian_error ** 2) * 1e2
         reward -= 0.01 * (action_penalty + controller_penalty)
         return reward
     
