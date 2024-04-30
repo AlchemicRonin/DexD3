@@ -115,7 +115,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
         self.height = self.instance.get_pose().p[2]
         openness = abs(self.instance.get_qpos()[0] - self.joint_limits_dict[str(self.index)]['middle'])
         total = abs(self.joint_limits_dict[str(self.index)]['left'] - self.joint_limits_dict[str(self.index)]['middle']) - self.init_open_rad
-        self.progress = 1 - openness / total
+        # self.progress = 1 - openness / total
         self.r_handle_pose, self.l_handle_pose = self.get_handle_global_pose()
 
         self.table_contact_boolean = self.check_actor_pair_contacts(l_check_contact_links, self.table)
@@ -146,9 +146,9 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
 
         self.target_distance = np.linalg.norm(self.l_handle_in_palm)
 
-        self.early_done = (self.target_distance < 0.1) # and (self.state == 3)
+        self.early_done = (self.target_distance < 0.03) # and (self.state == 3)
         # self.ealy_done = True if np.sum(ball_contact_boolean) > 0 else False
-        self.is_eval_done = (self.target_distance < 0.1) # and (self.state == 3)
+        self.is_eval_done = (self.target_distance < 0.03) # and (self.state == 3)
 
         # print("state:", self.state, "progress:", self.progress, "is_eval_done:", self.is_eval_done, "early_done:", self.early_done)
 
@@ -180,8 +180,7 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
 
         reward = 0
         # if self.state == GraspState.REACHING:
-        reward += -1 * (# min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p), 0.5) + 
-                         min(np.linalg.norm(self.l_palm_pose.p - self.l_handle_pose.p), 0.5))  # encourage palm be close to handle
+        reward += -10 * np.linalg.norm(self.l_palm_pose.p - self.l_handle_pose.p)  # encourage palm be close to handle
         # if self.progress < 0:
         #     reward += 0.5 * self.progress
 
@@ -205,7 +204,10 @@ class LaptopRLEnv(LaptopEnv, BaseRLEnv):
 
         # if self.l_handle_in_palm < 0.1:
         if self.early_done:
-            reward += (self.horizon - self.current_step) * 1.2 * (0.5 - self.progress)
+            early_done_reward = (self.horizon - self.current_step) * 1 * (0.03 - self.target_distance)
+            reward += early_done_reward
+            print("early done!")
+            # print(early_done_reward)
 
         if self.table_contact_boolean:
             reward -= 0.5
