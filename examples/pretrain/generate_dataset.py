@@ -6,6 +6,7 @@ from dexart.env.create_env import create_env
 from tqdm import tqdm
 import argparse
 from sapien.utils import Viewer
+import transforms3d
 
 
 def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_path='data/'):
@@ -43,6 +44,20 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
         # random qpos
         qpos = np.random.uniform(qlimits[:, 0], qlimits[:, 1])
         env.instance.set_qpos(qpos)
+
+        # add random position for large variance of pretrain data
+        random_orn = (np.random.rand() * 2 - 1) * RANDOM_CONFIG[task_name]['rand_degree'] / 180 * np.pi
+        if task_name == 'laptop':
+            pos = env.instance_init_pos + np.array([1,1,0.5]) * (np.random.random(3)*2-1) * RANDOM_CONFIG[task_name]['rand_pos'] # bucket need height variance 
+            orn = transforms3d.euler.euler2quat(0, 0, random_orn)
+        elif task_name == 'bucket':
+            pos = env.instance_init_pos + np.array([2,2,5]) * np.concatenate([np.random.random(2)*2-1,np.random.random(1)]) * RANDOM_CONFIG[task_name]['rand_pos'] # bucket need height variance
+            orn = transforms3d.euler.euler2quat(0, 0, np.pi + random_orn)
+        elif task_name == 'pot':
+            pos = env.instance_init_pos + np.array([2,2,5]) * np.concatenate([np.random.random(2)*2-1,np.random.random(1)]) * RANDOM_CONFIG[task_name]['rand_pos'] # bucket need height variance
+            orn = transforms3d.euler.euler2quat(0, 0, random_orn)
+
+        env.instance.set_root_pose(sapien.Pose(pos, orn))
 
         observed_pc = np.concatenate([obs['instance_1-point_cloud'], obs['instance_1-seg_gt']], axis=1)
         observed_pc = np.concatenate([observed_pc, obs['imagination_robot']], axis=0)

@@ -168,8 +168,20 @@ CAMERA_CONFIG = {
             pose=sapien.Pose(
                 # p=np.array([0.5, 1, 0.5]),
                 # q=transforms3d.euler.euler2quat(np.pi/2 , np.pi, -np.pi/4),
-                p=np.array([-0.55, 0, 1.2]),
-                q=transforms3d.euler.euler2quat(-np.pi*5/6 , 0, -np.pi/2),
+                p=np.array([-0.6, 0, 1]),
+                q=transforms3d.euler.euler2quat(-np.pi*6/7 , 0, -np.pi/2),
+            ),
+            fov=np.deg2rad(80),
+            resolution=(64, 64),
+        ),
+    },
+    "pot": {
+        "instance_1": dict(
+            pose=sapien.Pose(
+                # p=np.array([0.5, 1, 0.5]),
+                # q=transforms3d.euler.euler2quat(np.pi/2 , np.pi, -np.pi/4),
+                p=np.array([-0.7, 0, 0.8]),
+                q=transforms3d.euler.euler2quat(-np.pi*2/3 , 0, -np.pi/2),
             ),
             fov=np.deg2rad(90),
             resolution=(64, 64),

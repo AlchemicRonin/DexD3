@@ -158,7 +158,7 @@ class Solver(object):
                 obs_cloud = o3d.geometry.PointCloud(points=o3d.utility.Vector3dVector(pc[..., 0:3]))
                 obs_cloud.colors = o3d.utility.Vector3dVector(colors[:, 0:3])
                 # draw the axis
-                coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=[0, 0, 0])
+                coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05, origin=[0.4, 0, 1])
 
                 o3d.visualization.draw_geometries([obs_cloud, coordinate])
                 # exit()
