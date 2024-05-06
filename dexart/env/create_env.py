@@ -6,12 +6,14 @@ from dexart.env.rl_env.faucet_env import FaucetRLEnv
 from dexart.env.rl_env.bucket_env import BucketRLEnv
 from dexart.env.rl_env.laptop_env import LaptopRLEnv
 from dexart.env.rl_env.toilet_env import ToiletRLEnv
+from dexart.env.rl_env.pot_env import PotRLEnv
 from dexart.env import task_setting
 from dexart.env.sim_env.constructor import add_default_scene_light
 
 
 def create_env(task_name, use_visual_obs, use_gui=False, is_eval=False, pc_seg=False,
                pc_noise=False, index=-1, img_type=None, rand_pos=0.0, rand_degree=0, frame_skip=10,
+               fix_root_link=False,
                **kwargs):
     robot_name = "atlas" 
     # robot_name = "allegro_hand_xarm6_wrist_mounted_face_front" 
@@ -20,7 +22,7 @@ def create_env(task_name, use_visual_obs, use_gui=False, is_eval=False, pc_seg=F
     env_params = dict(robot_name=robot_name, rotation_reward_weight=rotation_reward_weight,
                       use_visual_obs=use_visual_obs, use_gui=use_gui, no_rgb=True, use_old_api=True,
                       index=index, frame_skip=frame_skip, rand_pos=rand_pos, rand_orn=rand_degree / 180 * np.pi,
-                      **kwargs)
+                      fix_root_link=fix_root_link, **kwargs)
     if img_type:
         assert img_type in task_setting.IMG_CONFIG.keys()
 
@@ -39,6 +41,8 @@ def create_env(task_name, use_visual_obs, use_gui=False, is_eval=False, pc_seg=F
         env = LaptopRLEnv(**env_params, friction=5)
     elif task_name == 'toilet':
         env = ToiletRLEnv(**env_params, friction=5)
+    elif task_name == 'pot':
+        env = PotRLEnv(**env_params, friction=5)
     else:
         raise NotImplementedError
     if use_visual_obs:

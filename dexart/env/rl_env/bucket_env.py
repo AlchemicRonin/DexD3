@@ -3,6 +3,7 @@ import os
 from functools import cached_property
 from pathlib import Path
 from typing import Optional
+from enum import Enum, auto
 
 import numpy as np
 import sapien.core as sapien
@@ -11,6 +12,10 @@ import transforms3d
 from dexart.env.rl_env.base import BaseRLEnv
 from dexart.env.sim_env.bucket_env import BucketEnv
 
+class GraspState(Enum):
+    REACHING = 1
+    GRASPING = 2
+    GRASPED = 3
 
 def getAngle(P, Q):
     R = np.dot(P, Q.T)
@@ -20,131 +25,190 @@ def getAngle(P, Q):
 
 class BucketRLEnv(BucketEnv, BaseRLEnv):
     def __init__(self, use_gui=False, frame_skip=5, robot_name="adroit_hand_free", friction=0, index=0, rand_pos=0.0,
-                 rand_orn=0.0, thick_handle=True, **renderer_kwargs):
+                 rand_orn=0.0, thick_handle=True, fix_root_link=False, **renderer_kwargs):
         # ============== status definition ==============
         self.instance_init_pos = None
         self.robot_init_pose = None
-        self.robot_object_contact = None
-        self.robot_instance_base_contact = None
+        self.finger_object_contact = None
+        self.finger_tip_pos = None
+        self.robot_instance_base_contact = None # NOTE: this may be changed to l_handle_contact
         self.rand_pos = rand_pos
         self.rand_orn = rand_orn
         self.grasp_dist = None
-        self.palm_height = None
+        self.r_palm_height = None
         # =================================================
-        super().__init__(use_gui, frame_skip, friction=friction, index=index, handle_type='left', fix_root_link=False,
+        super().__init__(use_gui, frame_skip, friction=friction, index=index, handle_type='left', fix_root_link=fix_root_link,
                          thick_handle=thick_handle, **renderer_kwargs)
-        self.box = self.create_box(
-            sapien.Pose(p=np.array([-0.5, 0., 0.15])),
-            half_size=np.array([0.1, 0.2, 0.15]),
-            color=[0.2, 0.2, 0.2],
-            name='box',
-        )
-        self.box.lock_motion()
+        # this box ?
+        # self.box = self.create_box(
+        #     sapien.Pose(p=np.array([-0.5, 0., 0.15])),
+        #     half_size=np.array([0.1, 0.2, 0.15]),
+        #     color=[0.2, 0.2, 0.2],
+        #     name='box',
+        # )
+        # self.box.lock_motion()
 
         # ============== will not change during training and randomize instance ==============
         self.robot_name = robot_name
         self.setup(robot_name)
-        self.robot_init_pose = sapien.Pose(np.array([-0.5, 0, 0.3]), transforms3d.euler.euler2quat(0, 0, 0))
+        self.robot_init_pose = sapien.Pose(np.array([-0.9, 0, -1.2]), transforms3d.euler.euler2quat(0, 0, 0))
         self.robot.set_pose(self.robot_init_pose)
         self.configure_robot_contact_reward()
         self.robot_annotation = self.setup_robot_annotation(robot_name)
         # ============== will change if randomize instance ==============
         self.reset()
 
+        # FIXME: ONLY FOR DEBUG
+        if self.use_gui:
+            l_actor_builder = self.scene.create_actor_builder()
+            # l_actor_builder.add_box_collision(half_size=[0.05, 0.05, 0.05])
+            l_actor_builder.add_box_visual(half_size=[0.05, 0.05, 0.05], color=[1., 0., 0.])
+            self.l_handle_pos = l_actor_builder.build(name='l_handle_pos')  # Add a box
+            self.l_plam_pos = l_actor_builder.build(name='l_plam_pos')  # Add a box
+            
+            r_actor_builder = self.scene.create_actor_builder()
+            # r_actor_builder.add_box_collision(half_size=[0.05, 0.05, 0.05])
+            r_actor_builder.add_box_visual(half_size=[0.05, 0.05, 0.05], color=[0., 0., 1.])
+            self.r_handle_pos = r_actor_builder.build(name='r_handle_pos')  # Add a box
+            self.r_plam_pos = r_actor_builder.build(name='r_plam_pos')  # Add a box
+
+
     def update_cached_state(self):
+# right side (with allegro hand)
+        ## finger
         for i, link in enumerate(self.finger_tip_links):
             self.finger_tip_pos[i] = self.finger_tip_links[i].get_pose().p
-        check_contact_links = self.finger_contact_links + [self.palm_link]
-        finger_contact_boolean = self.check_actor_pair_contacts(check_contact_links, self.handle_link)
-        self.robot_object_contact[:] = np.clip(np.bincount(self.finger_contact_ids, weights=finger_contact_boolean), 0,
-                                               1)
+        r_check_contact_links = self.finger_contact_links + [self.r_palm_link]
+        finger_contact_boolean = self.check_actor_pair_contacts(r_check_contact_links, self.r_handle)
+        # NOTE: change the name (in BaseRLEnv): self.robot_object_contact -> self.finger_object_contact
+        self.finger_object_contact[:] = np.clip(np.bincount(self.finger_contact_ids, weights=finger_contact_boolean), 0, 1)
+        # any one finger or palm is contacting
+        self.loosen_contact_finger = np.sum(self.finger_object_contact[:-1]) >= 1 or self.finger_object_contact[-1]
+        # two fingers and palm is contacting
+        self.is_contact_finger = np.sum(self.finger_object_contact[:-1]) >= 2 and self.finger_object_contact[-1]
+        
+        ## palm
+        self.r_palm_pose = self.r_palm_link.get_pose()
+        self.r_palm_v = self.r_palm_link.get_velocity()
+        self.r_palm_w = self.r_palm_link.get_angular_velocity()
+        trans_matrix = self.r_palm_pose.to_transformation_matrix()
+        self.r_palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
+
+        # left side (with ball)
+        l_check_contact_links = [self.l_palm_link]
+        ball_contact_boolean = self.check_actor_pair_contacts(l_check_contact_links, self.l_handle)
+        self.ball_object_contact = np.clip(ball_contact_boolean, 0,1) # the clip is not necessary
+        
+        # palm 
+        # self.l_palm_pose = self.l_palm_link.get_pose()
+        self.l_palm_pose = self.l_ball_link.get_pose()
+        self.l_palm_v = self.l_palm_link.get_velocity()
+        self.l_palm_w = self.l_palm_link.get_angular_velocity()
+        trans_matrix = self.l_palm_pose.to_transformation_matrix()
+        self.l_palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
+
+
+        # arm contact
         arm_contact_boolean = self.check_actors_pair_contacts(self.arm_contact_links, self.instance_links)
-        self.is_arm_contact = np.sum(arm_contact_boolean) >= 1
-        self.loosen_contact = np.sum(self.robot_object_contact[:-1]) >= 1 or self.robot_object_contact[-1]
-        self.strict_contact = np.sum(self.robot_object_contact[:-1]) >= 3 and self.robot_object_contact[-1]
-        self.is_contact = np.sum(self.robot_object_contact[:-1]) >= 3
-        self.is_contact_percent = (np.sum(self.robot_object_contact[:1])) / 4
-        self.finger_touched_percent = (np.sum(self.robot_object_contact[:])) / 5
-        finger_contact_boolean = self.check_actor_pair_contacts(check_contact_links, self.instance_base_link)
-        self.robot_instance_base_contact[:] = np.clip(
-            np.bincount(self.finger_contact_ids, weights=finger_contact_boolean), 0,
-            1)
-        self.finger_base_touched_percent = np.sum(self.robot_instance_base_contact) / 5
-
-        self.is_finger_touch_instance_base_percent = np.sum(self.robot_instance_base_contact[:]) / 5
-
+        # TODO: may used arm seperate contact in reward
+        l_arm_contact_boolean = self.check_actors_pair_contacts(self.l_arm_contact_links, self.instance_links)
+        r_arm_contact_boolean = self.check_actors_pair_contacts(self.r_arm_contact_links, self.instance_links)
+        
+        self.is_arm_contact = np.sum(arm_contact_boolean)
+        self.l_is_arm_contact = np.sum(l_arm_contact_boolean)
+        self.r_is_arm_contact = np.sum(r_arm_contact_boolean)
+        
         self.robot_qpos_vec = self.robot.get_qpos()
+
+        # object state
+        self.height = self.instance_base_link.get_pose().p[2]
+        self.delta_height = max(self.height - self.init_height, 0)
+
         openness = abs(self.instance.get_qpos()[0] - self.joint_limits_dict[str(self.index)]['middle'])
         total = abs(self.joint_limits_dict[str(self.index)]['left'] - self.joint_limits_dict[str(self.index)]['middle'])
         self.progress = 1 - openness / total
-        self.handle_pose = self.get_handle_global_pose()
-        self.palm_pose = self.palm_link.get_pose()
 
-        trans_matrix = self.palm_pose.to_transformation_matrix()
-        self.palm_vector = trans_matrix[:3, :3] @ np.array([1, 0, 0])
+        self.r_handle_pose, self.l_handle_pose = self.get_handle_global_pose()
+    
+        self.r_handle_in_palm = self.r_handle_pose.p - self.r_palm_pose.p
+        self.l_handle_in_palm = self.l_handle_pose.p - self.l_palm_pose.p
 
-        self.handle_in_palm = self.handle_pose.p - self.palm_pose.p
-        self.palm_v = self.palm_link.get_velocity()
-        self.palm_w = self.palm_link.get_angular_velocity()
-        self.height = self.instance_base_link.get_pose().p[2]
-        self.delta_height = max(self.height - self.init_height, 0)
         self.pose_mat = transforms3d.quaternions.quat2mat(self.instance.get_root_pose().q)
         self.degree_progress = getAngle(self.init_pose_mat, self.pose_mat)
-        if np.linalg.norm(self.palm_pose.p - self.handle_pose.p) > 0.2:  # Reaching
-            self.state = 1
-        elif not self.is_contact or self.progress < 0.5:
-            self.state = 2
+
+        # reaching state
+        if np.linalg.norm(self.r_handle_in_palm) > 0.2:  # Reaching
+            self.state = GraspState.REACHING
+        elif not self.is_contact_finger or self.progress < 0.5:
+            self.state = GraspState.GRASPING
         else:
-            self.state = 3
+            self.state = GraspState.GRASPED
         self.early_done = (self.progress > 0.9) and (self.state == 3) and (self.delta_height > 0.3)
         self.is_eval_done = (self.progress > 0.7) and (self.delta_height > 0.25)
-        self.last_palm_height = self.palm_height if self.palm_height else self.palm_pose.p[2]
-        self.palm_height = self.palm_pose.p[2]
-        self.last_grasp_dist = self.grasp_dist if self.grasp_dist else (np.linalg.norm(
-            self.finger_tip_pos[0] - self.finger_tip_pos[1]) + np.linalg.norm(
-            self.finger_tip_pos[0] - self.finger_tip_pos[2]) + np.linalg.norm(
-            self.finger_tip_pos[0] - self.finger_tip_pos[3])) / 3
-        self.grasp_dist = (np.linalg.norm(self.finger_tip_pos[0] - self.finger_tip_pos[1]) + np.linalg.norm(
-            self.finger_tip_pos[0] - self.finger_tip_pos[2]) + np.linalg.norm(
-            self.finger_tip_pos[0] - self.finger_tip_pos[3])) / 3
+
+        self.r_last_palm_height = self.r_palm_height if self.r_palm_height else self.r_palm_pose.p[2]
+        self.r_palm_height = self.r_palm_pose.p[2]
+        self.last_grasp_dist = self.grasp_dist if self.grasp_dist else (
+                np.linalg.norm(self.finger_tip_pos[0] - self.finger_tip_pos[1]) + 
+                np.linalg.norm(self.finger_tip_pos[0] - self.finger_tip_pos[2]) + 
+                np.linalg.norm(self.finger_tip_pos[0] - self.finger_tip_pos[3])
+            ) / 3
+        self.grasp_dist = (
+                np.linalg.norm(self.finger_tip_pos[0] - self.finger_tip_pos[1]) + 
+                np.linalg.norm(self.finger_tip_pos[0] - self.finger_tip_pos[2]) + 
+                np.linalg.norm(self.finger_tip_pos[0] - self.finger_tip_pos[3])
+            ) / 3
 
     def get_oracle_state(self):
-        return np.concatenate([
-            self.robot_qpos_vec, self.palm_v, self.palm_w, self.palm_pose.p, self.palm_vector[-1:],
-            [float(self.current_step) / float(self.horizon)]
-        ])
+        return self.get_robot_state()
 
     def get_robot_state(self):
+        # 30+(3+3+3+1)+(3+3+3+1)+1 = 51
         return np.concatenate([
-            self.robot_qpos_vec, self.palm_v, self.palm_w, self.palm_pose.p, self.palm_vector[-1:],
+            self.robot_qpos_vec, 
+            self.r_palm_v, 
+            self.r_palm_w, 
+            self.r_palm_pose.p, 
+            self.r_palm_vector[-1:],
+            self.l_palm_v, 
+            self.l_palm_w, 
+            self.l_palm_pose.p, 
+            self.l_palm_vector[-1:],
             [float(self.current_step) / float(self.horizon)]
         ])
 
     def get_reward(self, action):
+        if self.use_gui:
+            self.l_handle_pos.set_pose(sapien.Pose(p=self.l_handle_pose.p))
+            self.l_plam_pos.set_pose(sapien.Pose(p=self.l_palm_pose.p))
+            self.r_handle_pos.set_pose(sapien.Pose(p=self.r_handle_pose.p))
+            self.r_plam_pos.set_pose(sapien.Pose(p=self.r_palm_pose.p))
+
         reward = 0
-        reward += 0.2 * self.palm_vector[2]
-        reward -= 0.2 * self.finger_base_touched_percent  # under no circumstances should hand touch bucket base
-        if self.state == 1:
-            reward = -0.1 * min(np.linalg.norm(self.palm_pose.p - self.handle_pose.p),
+        reward += 0.2 * self.r_palm_vector[2]
+        # reward -= 0.2 * self.finger_base_touched_percent  # under no circumstances should hand touch bucket base
+        if self.state == GraspState.REACHING:
+            reward = -0.1 * min(np.linalg.norm(self.r_palm_pose.p - self.r_handle_pose.p),
                                 0.5)  # encourage palm be close to handle
-        elif self.state == 2:
-            reward += 0.2 * (int(self.is_contact))
+        elif self.state == GraspState.GRASPING:
+            reward += 0.2 * (int(self.is_contact_finger))
             reward -= 0.1 * (int(self.is_arm_contact))
             reward -= 0.01 * np.linalg.norm(self.instance_base_link.get_velocity())
             reward -= 0.01 * np.linalg.norm(self.instance_base_link.get_angular_velocity())
             reward += 0.5 * self.progress
-            reward += (0.2 * self.progress) * self.finger_touched_percent
-        elif self.state == 3:
-            reward += 0.2 * (int(self.is_contact))
+            # reward += (0.2 * self.progress) * self.finger_touched_percent
+        elif self.state == GraspState.GRASPED:
+            reward += 0.2 * (int(self.is_contact_finger))
             reward -= 0.1 * (int(self.is_arm_contact))
             reward += 0.5 * self.progress
-            reward += (0.2 * self.progress) * self.finger_touched_percent
+            # reward += (0.2 * self.progress) * self.finger_touched_percent
             if self.delta_height < 0.3:
-                reward += 100 * (self.palm_height - self.last_palm_height)
+                reward += 100 * (self.r_palm_height - self.r_last_palm_height)
                 reward += self.delta_height / 0.3 * 10  # lift to 0.6m is enough
 
         action_penalty = np.sum(np.clip(self.robot.get_qvel(), -1, 1) ** 2) * 0.01
-        controller_penalty = (self.cartesian_error ** 2) * 1e3
+        # controller_penalty = (self.r_cartesian_error ** 2) * 1e3
+        controller_penalty = 0
         reward -= 0.1 * (action_penalty + controller_penalty)
         return reward
 
@@ -157,9 +221,11 @@ class BucketRLEnv(BucketEnv, BaseRLEnv):
             self.flush_imagination_config()
 
         if self.robot_annotation.__contains__(str(self.index)):
-            self.instance_init_pos = self.robot.get_pose().p + np.array(self.robot_annotation[str(self.index)])
+            #self.instance_init_pos = np.array(self.robot_annotation[str(self.index)]) + self.robot.get_pose().p + np.array([0,0,1])
+            self.instance_init_pos = np.array([-0.1,0,0.2])
         else:
-            raise NotImplementedError
+            raise NotImplementedError("double check, when will this be invoked?")
+            self.instance_init_pos = self.pos 
         self.pos = self.instance_init_pos
         pos = self.pos + np.random.random(3) * self.rand_pos  # can add noise here to randomize loaded position
         random_orn = (np.random.rand() * 2 - 1) * self.rand_orn

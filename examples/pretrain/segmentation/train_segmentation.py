@@ -44,12 +44,22 @@ class Solver(object):
             raise ValueError('Unknown architecture: {}'.format(config['arch']))
         # self.load('checkpoints/1.pth')
         self.optimizer = optim.Adam(self.model.parameters(), lr=config['lr'])
+        # TODO: add weighted loss for other categories
         if config['cat'] == 'bucket':
             print('Using Weighted CrossEntropy loss')
-            self.criterion = nn.CrossEntropyLoss(weight=torch.tensor([3., 1., 1., 1.]).to(self.device))
+            self.criterion = nn.CrossEntropyLoss(weight=torch.tensor(
+               [2., 10., 1., 1., 1., 1., 1., 1., 1.]).to(self.device))
+        elif config['cat'] == 'pot':
+            print('Using Weighted CrossEntropy loss')
+            self.criterion = nn.CrossEntropyLoss(weight=torch.tensor(
+               [1., 3., 1., 1., 1., 1., 1., 1., 1.]).to(self.device))
+
         else:
             print('Using CrossEntropy loss')
             self.criterion = nn.CrossEntropyLoss()
+        
+        # may not be used
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=config['num_epochs']*len(self.train_loader), eta_min=1e-4)
 
         self.writer = SummaryWriter(config['log_dir'])
 
@@ -77,6 +87,8 @@ class Solver(object):
                     loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
+                # scheduler may not help
+                # self.scheduler.step()
 
                 if i % self.config['log_step'] == 0:
                     # print(f"Epoch [{epoch + 1}/{self.config['num_epochs']}], Step [{i + 1}/{len(self.train_loader)}], Loss: {loss.item():.4f}")
@@ -187,14 +199,14 @@ def main():
     use_img = args.use_img
     point_channel = 3
     config = {
-        'num_epochs': 100,
+        'num_epochs': 50,
         'log_step': 10,
         'val_step': 1,
         'log_dir': f'log/segmentation/{arch}/{cat}/{run}',
         'arch': arch,
         'lr': 1e-3,
         'classes': 9,
-        'save_step': 20,
+        'save_step': 10,
         'cat': cat,
     }
 

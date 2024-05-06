@@ -102,7 +102,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.robot = load_atlas(self.scene, disable_self_collision=False)
         
         self.robot.set_pose(sapien.Pose(np.array([0, 0, 0])))
-        self.robot.set_qpos([-1.57, 0 ,0 ,0 ,0 ,0, 0 ] + [1.57, 0 ,0 ,0 ,0 ,0, 0 ] + [0] * 16)
+        self.robot.set_qpos([-1.115, 0.078 , 1.562 , 1.715 , 1.618 ,0.473, 0.000 ] + [0.467, 0.388, 1.718 , -1.884 , 1.579 , 0.278 , 0.0 ] + [0] * 16)
         self.is_robot_free = "free" in robot_name
         self.is_atlas = "atlas" in robot_name
 
@@ -210,24 +210,34 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.cartesian_error = np.linalg.norm(relative_pos - target_root_velocity[:3] * self.control_time_step)
 
     def atlas_sim_step(self, action: np.ndarray):
+        action[:6] = 0
         current_qpos = self.robot.get_qpos()
-        l_ee_link_last_pose = self.l_ee_link.get_pose()
-        r_ee_link_last_pose = self.r_ee_link.get_pose()
         action = np.clip(action, -1, 1)
+        # action = np.zeros_like(action)
+
+
+        l_ee_link_last_pose = self.l_ee_link.get_pose()
         l_target_root_velocity = recover_action(action[:6], self.velocity_limit[:6])
-        r_target_root_velocity = recover_action(action[6:12], self.velocity_limit[:6])
         l_palm_jacobian = self.l_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[:self.arm_dof])
-        r_palm_jacobian = self.r_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[self.arm_dof:self.arm_dof * 2])
         l_arm_qvel = compute_inverse_kinematics(l_target_root_velocity, l_palm_jacobian)[:self.arm_dof]
-        r_arm_qvel = compute_inverse_kinematics(r_target_root_velocity, r_palm_jacobian)[:self.arm_dof]
         l_arm_qvel = np.clip(l_arm_qvel, -np.pi / 1, np.pi / 1)
-        r_arm_qvel = np.clip(r_arm_qvel, -np.pi / 1, np.pi / 1)
         l_arm_qpos = l_arm_qvel * self.control_time_step + self.robot.get_qpos()[:self.arm_dof]
+        # l_arm_qvel = np.zeros(7)
+        # l_arm_qpos = np.zeros(7)
+        
+        r_ee_link_last_pose = self.r_ee_link.get_pose()
+        r_target_root_velocity = recover_action(action[6:12], self.velocity_limit[:6])
+        r_palm_jacobian = self.r_kinematic_model.compute_end_link_spatial_jacobian(current_qpos[self.arm_dof:self.arm_dof * 2])
+        r_arm_qvel = compute_inverse_kinematics(r_target_root_velocity, r_palm_jacobian)[:self.arm_dof]
+        r_arm_qvel = np.clip(r_arm_qvel, -np.pi / 1, np.pi / 1)
         r_arm_qpos = r_arm_qvel * self.control_time_step + self.robot.get_qpos()[self.arm_dof:self.arm_dof * 2]
+        # r_arm_qvel = np.zeros(7)
+        # r_arm_qpos = np.zeros(7)
 
         # print("q_limits", self.robot.get_qlimits())
 
         hand_qpos = recover_action(action[12:], self.robot.get_qlimits()[14:])
+        # hand_qpos = np.zeros(16)
 
         target_q_pos = np.concatenate([l_arm_qpos, r_arm_qpos, hand_qpos])
         target_q_vel = np.zeros_like(target_q_pos)
@@ -238,7 +248,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         self.robot.set_drive_velocity_target(target_q_vel)
 
         for i in range(self.frame_skip):
-            self.robot.set_qf(self.robot.compute_passive_force(external=False, coriolis_and_centrifugal=False))
+            self.robot.set_qf(self.robot.compute_passive_force(external=True, coriolis_and_centrifugal=True))
             self.scene.step()
         self.current_step += 1
 
@@ -315,8 +325,10 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
         # configure palm
         self.r_palm_link_name = info.palm_name
         self.l_palm_link_name = 'l_hand'
+        
         self.r_palm_link = [link for link in self.robot.get_links() if link.get_name() == 'base_link'][0]
         self.l_palm_link = [link for link in self.robot.get_links() if link.get_name() == 'l_hand'][0]
+        self.l_ball_link = [link for link in self.robot.get_links() if link.get_name() == 'l_palm'][0]
 
         # configure fingers
         finger_tip_names = ["link_15.0_tip", "link_3.0_tip", "link_7.0_tip", "link_11.0_tip"]
@@ -707,7 +719,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                         if "additional_process_fn" in camera_cfg["point_cloud"]:
                             for fn in camera_cfg["point_cloud"]["additional_process_fn"]:
                                 obs = fn(obs, self.np_random)
-                        obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 4))
+                        obs_dict[f"{name}-seg_gt"] = np.zeros((camera_cfg["point_cloud"]["num_points"], 8))
                     elif modality == "segmentation":
                         obs = output_array[..., :2].astype(np.uint8)
                     else:
@@ -759,7 +771,7 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                                               shape=(cam_cfg[modality_name]["num_points"],) + (3,))
                         obs_dict[f"{cam_name}-seg_gt"] = gym.spaces.Box(low=-np.inf, high=np.inf,
                                                                         shape=(cam_cfg[modality_name]["num_points"],)
-                                                                              + (4,))
+                                                                              + (8,)) # 8 is the number of newly segmentation masks
                     elif modality_name == "segmentation":
                         spec = gym.spaces.Box(low=0, high=255, shape=resolution + (2,), dtype=np.uint8)
                     else:
@@ -772,11 +784,10 @@ class BaseRLEnv(BaseSimulationEnv, gym.Env):
                 self.update_imagination(reset_goal=True)
                 for img_name, points in self.imaginations.items():
                     num_points = points.shape[0]
-                    obs_dict[img_name] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(num_points, 7))
+                    obs_dict[img_name] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(num_points, 11))
                     if self.use_history_obs:
                         obs_dict['previous-' + img_name] = gym.spaces.Box(low=-np.inf, high=np.inf,
-                                                                          shape=(num_points, 7))
-
+                                                                          shape=(num_points, 11))
             return gym.spaces.Dict(obs_dict)
 
 

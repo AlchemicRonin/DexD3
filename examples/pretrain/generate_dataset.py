@@ -6,12 +6,17 @@ from dexart.env.create_env import create_env
 from tqdm import tqdm
 import argparse
 from sapien.utils import Viewer
+import sapien.core as sapien
 import transforms3d
 
+# NOTE: MUST disable GUI for data generation
+#   only enable GUI for DEBUG
+# Using GUI will render the table, room and so on, which won't be get when training RL
+GUI = False
 
 def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_path='data/'):
     env = create_env(task_name=task_name,
-                     use_gui=False,
+                     use_gui=GUI,
                      is_eval=False,
 
                      use_visual_obs=True,
@@ -22,14 +27,18 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
                      img_type=img_type,
                      rand_pos=RANDOM_CONFIG[task_name]['rand_pos'],
                      rand_degree=RANDOM_CONFIG[task_name]['rand_degree'],
+                     
+                     # fix root of instance capture a static pitcure
+                     fix_root_link=True
                      )
     obs = env.reset()
 
-    # viewer = Viewer(env.renderer)
-    # viewer.set_scene(env.scene)
-    # viewer.focus_camera(env.cameras['instance_1'])
-    # env.viewer = viewer
-    # env.render()
+    if GUI:
+        viewer = Viewer(env.renderer)
+        viewer.set_scene(env.scene)
+        viewer.focus_camera(env.cameras['instance_1'])
+        env.viewer = viewer
+        env.render()
 
     pc_data = []
     for i in tqdm(range(env.horizon * n_fold)):
@@ -38,7 +47,8 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
         # step: RLbaseEnv -> step -> get_visual_observation -> get_camera_obs
         # config: createEnv.setup_visual_obs_config -> task_setting.py:OBS_CONFIG -> camera_cfg
         obs, reward, done, _ = env.step(action)
-        # env.render()
+        if GUI:
+            env.render()
         
         qlimits = env.instance.get_qlimits()
         # random qpos
@@ -67,13 +77,17 @@ def gen_single_data(task_name, index, split, n_fold=32, img_type='robot', save_p
 
         if i % env.horizon == 0:
             obs = env.reset()  # reset random position and orn each fold
+    
+    if GUI:
+        viewer.close()
 
     # save data
     if not os.path.exists(os.path.join(save_path, f"{task_name}")):
         os.makedirs(os.path.join(save_path, f"{task_name}"))
     np.save(os.path.join(save_path, f"{task_name}/{split}_{index}.npy"), pc_data)
     print(f"save {split}_{index}.npy")
-
+    
+    del env
 
 def merge_data(category, save_path='data', merge_half=False):
     dir_name = os.path.join(save_path, category)

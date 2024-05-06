@@ -54,7 +54,8 @@ if __name__ == '__main__':
                 obs = obs[np.newaxis, :]
             action = policy.predict(observation=obs, deterministic=True)[0]
             obs, reward, done, _ = env.step(action)
-            print(f"reward = {reward}")
+            # print(f"reward = {reward}")
             env.render()
             if done:
+                print("done")
                 break

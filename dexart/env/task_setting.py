@@ -8,11 +8,14 @@ ROBOT_TABLE_MARGIN_Y = 0.04
 # TODO: change the valid bound
 BOUND_CONFIG = {
     "faucet": [0.1, 2.0, -1.0, 1, -0.1352233 + 0.14, 0.4],
-    "bucket": [0.1, 2.0, -2.0, 2.0, -0.29, 0.4],
-    "laptop": [-0.5, 1.4, -1.0, 1, -0.5, 3],
+    # "bucket": [0.1, 2.0, -2.0, 2.0, -0.29, 0.4],
+    "bucket": [-0.5, 1.4, -1.0, 1, -0.2, 3],
+    "laptop": [-0.5, 1.4, -1.0, 1, -0.2, 3],
+    "pot": [-0.5, 1.4, -1.0, 1, -0.2, 3],
     "toilet": [0.1, 2.0, -2.0, 2, -0.3, 0.8],
 }
 
+# ??? where is this used?
 ROBUSTNESS_INIT_CAMERA_CONFIG = {
     "laptop": {
         "r": 1,
@@ -124,6 +127,10 @@ TRAIN_CONFIG = {
     "usb":{
         'seen': [100061, 100071, 100072, 100073, 100079, 100085, ],
         'unseen': [100087, 100095, 100103, 100108, 100113],
+    },
+    "pot":{
+        'seen': [100015, 100017, 100021, 100023, 100047],
+        'unseen': [100051, 100057, 100060],
     }
 }
 
@@ -138,7 +145,8 @@ TASK_CONFIG = {
                 102658, 102677, 102687, 102689, 102692, 102697, 102699, 102701, 102703, 102707,
                102708, 103234, 102663, 102666, 102667, 102669, 102670, 102675],
     "usb": [100061, 100071, 100072, 100073, 100079, 100085, 100087, 100095, 100103, 100108, 100113],
-    "pen": [101685, 101732],
+    "pen": [101685, 101732, 102909],
+    "pot": [100015, 100017, 100021, 100023, 100047, 100051, 100057, 100060]
 }
 
 # Camera config
@@ -156,10 +164,12 @@ CAMERA_CONFIG = {
     "bucket": {
         "instance_1": dict(
             pose=sapien.Pose(
-                p=np.array([0, 1, 0.5]),
-                q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
+                # p=np.array([0, 1, 0.5]),
+                # q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
+                p=np.array([-0.6, 0, 1]),
+                q=transforms3d.euler.euler2quat(-np.pi*6/7 , 0, -np.pi/2),
             ),
-            fov=np.deg2rad(69.4),
+            fov=np.deg2rad(80),
             resolution=(64, 64),
         ),
     },
@@ -178,12 +188,12 @@ CAMERA_CONFIG = {
     "pot": {
         "instance_1": dict(
             pose=sapien.Pose(
-                # p=np.array([0.5, 1, 0.5]),
-                # q=transforms3d.euler.euler2quat(np.pi/2 , np.pi, -np.pi/4),
-                p=np.array([-0.7, 0, 0.8]),
-                q=transforms3d.euler.euler2quat(-np.pi*2/3 , 0, -np.pi/2),
+                p=np.array([-0.6, 0, 1]),
+                q=transforms3d.euler.euler2quat(-np.pi*6/7 , 0, -np.pi/2),
+                # p=np.array([-0.75, 0, 0.9]),
+                # q=transforms3d.euler.euler2quat(-np.pi*2/3 , 0, -np.pi/2),
             ),
-            fov=np.deg2rad(90),
+            fov=np.deg2rad(80),
             resolution=(64, 64),
         ),
     },
@@ -198,46 +208,46 @@ CAMERA_CONFIG = {
         ),
     },
     "viz_only": {  # only for visualization (human), not for visual observation
-        "faucet_viz": dict(
-            position=np.array([-0.3, 0.6, 0.4]),
-            look_at_dir=np.array([0.16, -0.7, -0.35]),
-            # from left side.
-            right_dir=np.array([-1.5, -2, 0]),
-            fov=np.deg2rad(69.4),
-            resolution=(1000, 1000),
-        ),
-        "faucet_viz2": dict(
-            pose=sapien.Pose(
-                p=np.array([0, 0.8, 0.5]),
-                q=transforms3d.euler.euler2quat(np.pi / 3, np.pi, 0),
-            ),
-            fov=np.deg2rad(69.4),
-            resolution=(1000, 1000),
-        ),
-        "bucket_viz": dict(
-            pose=sapien.Pose(
-                p=np.array([0, 1, 0.5]),
-                q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
-            ),
-            fov=np.deg2rad(69.4),
-            resolution=(1000, 1000),
-        ),
-        "laptop_viz": dict(
-            pose=sapien.Pose(
-                p=np.array([0, 1, 0.5]),
-                q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
-            ),
-            fov=np.deg2rad(69.4),
-            resolution=(1000, 1000),
-        ),
-        "toilet_viz": dict(
-            pose=sapien.Pose(
-                p=np.array([0, 1, 0.5]),
-                q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
-            ),
-            fov=np.deg2rad(69.4),
-            resolution=(1000, 1000),
-        ),
+    #     "faucet_viz": dict(
+    #         position=np.array([-0.3, 0.6, 0.4]),
+    #         look_at_dir=np.array([0.16, -0.7, -0.35]),
+    #         # from left side.
+    #         right_dir=np.array([-1.5, -2, 0]),
+    #         fov=np.deg2rad(69.4),
+    #         resolution=(1000, 1000),
+    #     ),
+    #     "faucet_viz2": dict(
+    #         pose=sapien.Pose(
+    #             p=np.array([0, 0.8, 0.5]),
+    #             q=transforms3d.euler.euler2quat(np.pi / 3, np.pi, 0),
+    #         ),
+    #         fov=np.deg2rad(69.4),
+    #         resolution=(1000, 1000),
+    #     ),
+    #     "bucket_viz": dict(
+    #         pose=sapien.Pose(
+    #             p=np.array([0, 1, 0.5]),
+    #             q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
+    #         ),
+    #         fov=np.deg2rad(69.4),
+    #         resolution=(1000, 1000),
+    #     ),
+    #     "laptop_viz": dict(
+    #         pose=sapien.Pose(
+    #             p=np.array([0, 1, 0.5]),
+    #             q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
+    #         ),
+    #         fov=np.deg2rad(69.4),
+    #         resolution=(1000, 1000),
+    #     ),
+    #     "toilet_viz": dict(
+    #         pose=sapien.Pose(
+    #             p=np.array([0, 1, 0.5]),
+    #             q=transforms3d.euler.euler2quat(np.pi / 2, np.pi, 0),
+    #         ),
+    #         fov=np.deg2rad(69.4),
+    #         resolution=(1000, 1000),
+    #     ),
     },
 }
 
@@ -309,8 +319,9 @@ IMG_CONFIG = {
 }
 
 RANDOM_CONFIG = {
-    "bucket": {"rand_pos": 0.05, "rand_degree": 0},
-    "laptop": {"rand_pos": 0.1, "rand_degree": 60},
+    "bucket": {"rand_pos": 0.05, "rand_degree": 30},
+    "pot": {"rand_pos": 0.05, "rand_degree": 0},
+    "laptop": {"rand_pos": 0.05, "rand_degree": 0},
     "faucet": {"rand_pos": 0.1, "rand_degree": 90},
     "toilet": {"rand_pos": 0.2, "rand_degree": 45},
 }

@@ -16,9 +16,11 @@ class BucketEnv(BaseSimulationEnv):
         super().__init__(use_gui=use_gui, frame_skip=frame_skip, **renderer_kwargs)
         self.instance_collision_links = None
         self.instance_links = None
-        self.handle_link = None
+        # self.handle_link = None
+        self.r_handle = None
+        self.l_handle = None
         assert handle_type in ['left', 'middle']
-
+        # TODO: how should we deal with handle_type?
         self.handle_type = handle_type
         self.fix_root_link = fix_root_link
         self.scale_path = None
@@ -38,11 +40,12 @@ class BucketEnv(BaseSimulationEnv):
 
         self.friction = friction
         # load table
-        self.table = self.create_table(table_height=0.6, table_half_size=[0.65, 0.65, 0.025])
+        self.table = self.create_table()
         self.create_room()
         # default pos and orn, will be used in reset_env
         self.pos = np.array([0, 0, 0.1])
         self.orn = transforms3d.euler.euler2quat(0, 0, 0)
+
         index = renderer_kwargs['index']
         self.task_config_name = 'bucket'
         self.instance_list = TASK_CONFIG[self.task_config_name]
@@ -54,6 +57,7 @@ class BucketEnv(BaseSimulationEnv):
 
         self.setup_instance_annotation()
 
+        # NOTE: self.i is used to iterate through the instance_list
         self.i = 0
         self.handle2link_relative_pose_dict = dict()
 
@@ -61,16 +65,27 @@ class BucketEnv(BaseSimulationEnv):
             self.index = self.instance_list[index]
             self.instance, self.revolute_joint, self.revolute_joint_index = self.load_instance(index=self.index)
             self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle'])
-            self.handle_link = self.revolute_joint.get_child_link()
+            # TODO: check the two handle links
+            # self.handle_link = self.revolute_joint.get_child_link()
+            self.r_handle = self.revolute_joint.get_child_link()
+            self.l_handle = self.revolute_joint.get_parent_link()
             self.instance_links = self.instance.get_links()
             self.instance_collision_links = [link for link in self.instance.get_links() if
                                            len(link.get_collision_shapes()) > 0]
+            # TODO: change base line to one of handle  
             self.instance_base_link = [link for link in self.instance.get_links() if link.get_name() == 'link_1'][0]
-            self.handle_id = self.handle_link.get_id()
+            self.l_handle_id = self.r_handle.get_id()
+            self.r_handle_id = self.l_handle.get_id()
+            # self.handle_id = self.handle_link.get_id()
             self.instance_ids_without_handle = [link.get_id() for link in self.instance_links]
-            self.instance_ids_without_handle.remove(self.handle_id)
+            # self.instance_ids_without_handle.remove(self.handle_id)
+            self.instance_ids_without_handle.remove(self.l_handle_id)
+            self.instance_ids_without_handle.remove(self.r_handle_id)
             if not self.handle2link_relative_pose_dict.__contains__(self.index):
-                self.handle2link_relative_pose_dict[self.index] = self.update_handle_relative_pose()
+                # self.handle2link_relative_pose_dict[self.index] = self.update_handle_relative_pose()
+                self.handle2link_relative_pose_dict[self.index] = {}
+                self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("r_handle"))
+                self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("l_handle"))
         self.reset_env()
 
     def setup_instance_annotation(self):
@@ -100,6 +115,7 @@ class BucketEnv(BaseSimulationEnv):
 
 
         loader.scale = self.scale_dict[str(index)]
+        # TODO: physical_material and density may be useful for laptop?
         physical_material: sapien.PhysicalMaterial = self.scene.create_physical_material(
             static_friction=1,
             dynamic_friction=1,
@@ -150,16 +166,26 @@ class BucketEnv(BaseSimulationEnv):
             self.index = self.instance_list[self.i]
             self.instance, self.revolute_joint, self.revolute_joint_index = self.load_instance(index=self.index)
             self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['middle'])
-            self.handle_link = self.revolute_joint.get_child_link()
+            # TODO: check the two handle links, be same as the __init__ function
+            # self.handle_link = self.revolute_joint.get_child_link()
+            self.r_handle = self.revolute_joint.get_child_link()
+            self.l_handle = self.revolute_joint.get_parent_link()
             self.instance_links = self.instance.get_links()
             self.instance_collision_links = [link for link in self.instance.get_links() if
                                            len(link.get_collision_shapes()) > 0]
             self.instance_base_link = [link for link in self.instance.get_links() if link.get_name() == 'link_1'][0]
-            self.handle_id = self.handle_link.get_id()
+            # self.handle_id = self.handle_link.get_id()
+            self.l_handle_id = self.r_handle.get_id() # ring handle of the bucket
+            self.r_handle_id = self.l_handle.get_id() # base of the bucket
             self.instance_ids_without_handle = [link.get_id() for link in self.instance_links]
-            self.instance_ids_without_handle.remove(self.handle_id)
+            # self.instance_ids_without_handle.remove(self.handle_id)
+            self.instance_ids_without_handle.remove(self.l_handle_id)
+            self.instance_ids_without_handle.remove(self.r_handle_id)
             if not self.handle2link_relative_pose_dict.__contains__(self.index):
-                self.handle2link_relative_pose_dict[self.index] = self.update_handle_relative_pose()
+                # self.handle2link_relative_pose_dict[self.index] = self.update_handle_relative_pose()
+                self.handle2link_relative_pose_dict[self.index] = {}
+                self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("r_handle"))
+                self.handle2link_relative_pose_dict[self.index].update(self.update_handle_relative_pose("l_handle"))
 
         pos = self.pos  # can add noise here to randomize loaded position
         orn = transforms3d.euler.euler2quat(0, 0, 0)
@@ -167,20 +193,25 @@ class BucketEnv(BaseSimulationEnv):
         self.instance.set_root_pose(sapien.Pose(pos, orn))
         self.instance.set_qpos(self.joint_limits_dict[str(self.index)]['left'])
 
-    def update_handle_relative_pose(self):
+    def update_handle_relative_pose(self, handle_name = "r_handle"):
         vertices_relative_pose_list = list()
         vertices_global_pose_list = list()
-        # get all the collision mesh of laptop upper face
-        for collision_mesh in self.handle_link.get_collision_shapes():
+        
+        assert handle_name in ["r_handle", "l_handle"], "handle_name should be either 'r_handle' or 'l_handle'"
+        handle = getattr(self, handle_name)
+
+        for collision_mesh in handle.get_collision_shapes():
             vertices = collision_mesh.geometry.vertices
             for vertex in vertices:
                 vertex_relative_pose = sapien.Pose(vertex * collision_mesh.geometry.scale).transform(
                     collision_mesh.get_local_pose())
                 vertices_relative_pose_list.append(vertex_relative_pose)
-                vertices_global_pose_list.append(self.handle_link.get_pose().transform(vertex_relative_pose))
+                vertices_global_pose_list.append(handle.get_pose().transform(vertex_relative_pose))
 
         z_max = -1e9
+        z_min = 1e9
         max_z_index = 0
+        min_z_index = 0
         sum_pos = np.zeros(3)
         for i, vertex_global_pose in enumerate(vertices_global_pose_list):
             sum_pos += vertex_global_pose.p
@@ -188,20 +219,28 @@ class BucketEnv(BaseSimulationEnv):
             if z > z_max:
                 z_max = z
                 max_z_index = i
+            if z < z_min:
+                z_min = z
+                min_z_index = i
         mean_pos = sum_pos / len(vertices_global_pose_list)
 
         # for x and z, we use the corresponding value of the highest vertex
         # for y, we use the mean of all the vertices
-        x = vertices_global_pose_list[max_z_index].p[0]
-        z = z_max
         y = mean_pos[1]
+        if handle_name == "r_handle":
+            x = vertices_global_pose_list[max_z_index].p[0]
+            z = z_max
+        elif handle_name == "l_handle":
+            x = vertices_global_pose_list[min_z_index].p[0]
+            z = z_min
 
         handle_global_pose = sapien.Pose(np.array([x, y, z]))
-        link_global_pose = self.handle_link.get_pose()
+        link_global_pose = handle.get_pose()
 
         relative_pose = link_global_pose.inv().transform(handle_global_pose)
-        return relative_pose
+        return {handle_name: relative_pose}
 
     def get_handle_global_pose(self):
-        better_global_pose = self.handle_link.get_pose().transform(self.handle2link_relative_pose_dict[self.index])
-        return better_global_pose
+        r_better_global_pose = self.r_handle.get_pose().transform(self.handle2link_relative_pose_dict[self.index]["r_handle"])
+        l_better_global_pose = self.l_handle.get_pose().transform(self.handle2link_relative_pose_dict[self.index]["l_handle"])
+        return r_better_global_pose, l_better_global_pose

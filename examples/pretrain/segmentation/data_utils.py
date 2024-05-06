@@ -44,7 +44,7 @@ class SemSegDataset(Dataset):
                 np.concatenate([sample[:, 3:],np.ones((num_point, 1))],axis=1), 
                 axis=1)
             
-        if self.only_img:
+        elif self.only_img:
             # only use image as input
             points = sample[512:, 0:self.point_channel]
             labels = np.argmax(
@@ -66,9 +66,15 @@ if __name__ == '__main__':
     import open3d as o3d
     import matplotlib.pyplot as plt
     from icecream import ic, install
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--task_name', type=str, default='laptop')
+    args = parser.parse_args()
+    task_name = args.task_name
 
     install()
-    dataset = SemSegDataset(split='train')
+    dataset = SemSegDataset(root_dir=f'data/{task_name}',split='test')
     for i in tqdm(range(len(dataset))):
         idx = np.random.randint(0, len(dataset))
         pc, label = dataset[idx]

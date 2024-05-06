@@ -34,18 +34,18 @@ def get_3d_policy_kwargs(extractor_name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--n', type=int, default=10)
-    parser.add_argument('--workers', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=3e-4)
+    parser.add_argument('--n', type=int, default=100)
+    parser.add_argument('--workers', type=int, default=8)
+    parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--ep', type=int, default=10)
-    parser.add_argument('--bs', type=int, default=10)
+    parser.add_argument('--bs', type=int, default=500)
     parser.add_argument('--seed', type=int, default=100)
-    parser.add_argument('--iter', type=int, default=1000)
+    parser.add_argument('--iter', type=int, default=5000)
     parser.add_argument('--freeze', dest='freeze', action='store_true', default=False)
     parser.add_argument('--task_name', type=str, default="laptop")
     parser.add_argument('--extractor_name', type=str, default="smallpn")
     parser.add_argument('--pretrain_path', type=str, default=None)
-    parser.add_argument('--save_freq', type=int, default=1)
+    parser.add_argument('--save_freq', type=int, default=10)
     parser.add_argument('--save_path', type=str, default=BASE_DIR)
     args = parser.parse_args()
 
@@ -53,7 +53,7 @@ if __name__ == '__main__':
     extractor_name = args.extractor_name
     seed = args.seed if args.seed >= 0 else random.randint(0, 100000)
     pretrain_path = args.pretrain_path
-    horizon = 200
+    horizon = 100
     env_iter = args.iter * horizon * args.n
     print(f"freeze: {args.freeze}")
 
@@ -91,6 +91,7 @@ if __name__ == '__main__':
 
 
     env = SubprocVecEnv([create_env_fn] * args.workers, "spawn")  # train on a list of envs.
+    # env = create_env_fn()
 
     model = PPO("PointCloudPolicy", env, verbose=1,
                 n_epochs=args.ep,
@@ -103,6 +104,7 @@ if __name__ == '__main__':
                 max_lr=args.lr,
                 adaptive_kl=0.02,
                 target_kl=0.2,
+                tensorboard_log=os.path.join(BASE_DIR, "logs"),
                 )
 
     if pretrain_path is not None:
@@ -121,7 +123,7 @@ if __name__ == '__main__':
 
     model.learn(
         total_timesteps=int(env_iter),
-        reset_num_timesteps=False,
+        reset_num_timesteps=True,
         iter_start=rollout,
         callback=SimpleCallback(model_save_freq=args.save_freq, model_save_path=args.save_path, rollout=0),
     )
