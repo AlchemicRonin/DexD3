@@ -35,5 +35,4 @@ examples/logs/
 
 .vscode/
 data/
-log/*
-!log/segmentation
+log/
